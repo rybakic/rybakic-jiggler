@@ -1,0 +1,87 @@
+{
+  "name": "rybakic-jiggler",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Electron + Angular desktop mouse jiggler with tray support.",
+  "license": "UNLICENSED",
+  "packageManager": "npm@11.7.0",
+  "main": "electron/main.js",
+  "scripts": {
+    "ng": "ng",
+    "start": "ng serve",
+    "electron": "wait-on http://localhost:4200 && electron .",
+    "dev": "concurrently -k \"ng serve\" \"npm run electron\"",
+    "build": "ng build --base-href ./",
+    "build:web": "ng build --base-href ./",
+    "build:win": "npm run build:web && electron-builder -w --x64",
+    "watch": "ng build --watch --configuration development",
+    "test": "ng test"
+  },
+  "dependencies": {
+    "@angular/cdk": "^21.0.0",
+    "@angular/common": "^21.2.0",
+    "@angular/compiler": "^21.2.0",
+    "@angular/core": "^21.2.0",
+    "@angular/forms": "^21.2.0",
+    "@angular/platform-browser": "^21.2.0",
+    "@angular/router": "^21.2.0",
+    "@taiga-ui/addon-charts": "^4.73.0",
+    "@taiga-ui/addon-commerce": "^4.73.0",
+    "@taiga-ui/addon-doc": "^4.73.0",
+    "@taiga-ui/addon-mobile": "^4.73.0",
+    "@taiga-ui/addon-table": "^4.73.0",
+    "@taiga-ui/cdk": "^4.73.0",
+    "@taiga-ui/core": "^4.73.0",
+    "@taiga-ui/event-plugins": "^4.0.2",
+    "@taiga-ui/icons": "^4.73.0",
+    "@taiga-ui/kit": "^4.73.0",
+    "@taiga-ui/layout": "^4.73.0",
+    "@tailwindcss/postcss": "^4.2.1",
+    "postcss": "^8.5.8",
+    "rxjs": "~7.8.0",
+    "tailwindcss": "^4.2.1",
+    "tslib": "^2.3.0"
+  },
+  "devDependencies": {
+    "@angular/build": "^21.2.0",
+    "@angular/cli": "^21.2.0",
+    "@angular/compiler-cli": "^21.2.0",
+    "concurrently": "^9.2.1",
+    "electron": "^40.7.0",
+    "electron-builder": "^26.8.1",
+    "jsdom": "^28.0.0",
+    "less": "^4.5.1",
+    "prettier": "^3.8.1",
+    "typescript": "~5.9.2",
+    "vitest": "^4.0.8",
+    "wait-on": "^9.0.4"
+  },
+  "build": {
+    "productName": "RYBAKIČ Mouse Jiggler",
+    "appId": "com.rybakic.mousejiggler",
+    "asar": true,
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**",
+      "public/**",
+      "electron/**",
+      "package.json"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "public/active.ico",
+      "signAndEditExecutable": true
+    },
+    "nsis": {
+      "artifactName": "rybakic_mouse_jiggler_setup.${ext}",
+      "installerIcon": "public/disable.ico",
+      "uninstallerIcon": "public/disable.ico",
+      "installerHeaderIcon": "public/disable.ico",
+      "createDesktopShortcut": true,
+      "shortcutName": "RYBAKIČ Mouse Jiggler",
+      "uninstallDisplayName": "RYBAKIČ Mouse Jiggler"
+    }
+  }
+}

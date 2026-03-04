@@ -1,0 +1,360 @@
+const { app, BrowserWindow, Tray, Menu, globalShortcut, ipcMain } = require('electron');
+const { spawn } = require('child_process');
+const fs = require('fs');
+const path = require('path');
+
+let win;
+let tray;
+let jigglerProcess = null;
+let isJigglerEnabled = false;
+let isQuitting = false;
+const hasSingleInstanceLock = app.requestSingleInstanceLock();
+
+const DEFAULT_SETTINGS = {
+  deviation: 10,
+  frequency: 1000,
+  smoothness: 10,
+};
+
+const TRAY_ICON_FILES = {
+  active: 'active.ico',
+  disabled: 'disable.ico',
+  fallback: 'icon.ico',
+};
+
+let jigglerSettings = { ...DEFAULT_SETTINGS };
+
+function clamp(value, min, max) {
+  return Math.min(Math.max(value, min), max);
+}
+
+function sanitizeSettings(raw) {
+  const input = raw ?? {};
+
+  return {
+    deviation: clamp(Math.round(Number(input.deviation) || DEFAULT_SETTINGS.deviation), 1, 100),
+    frequency: clamp(Math.round(Number(input.frequency) || DEFAULT_SETTINGS.frequency), 100, 10000),
+    smoothness: clamp(Math.round(Number(input.smoothness) || DEFAULT_SETTINGS.smoothness), 1, 20),
+  };
+}
+
+function resolvePublicAsset(name) {
+  if (app.isPackaged) {
+    return path.join(app.getAppPath(), 'public', name);
+  }
+
+  return path.join(__dirname, '..', 'public', name);
+}
+
+function getTrayIconPath(enabled) {
+  const preferred = resolvePublicAsset(enabled ? TRAY_ICON_FILES.active : TRAY_ICON_FILES.disabled);
+  const fallback = resolvePublicAsset(TRAY_ICON_FILES.fallback);
+
+  if (fs.existsSync(preferred)) {
+    return preferred;
+  }
+
+  return fallback;
+}
+
+function getState() {
+  return {
+    enabled: isJigglerEnabled,
+    settings: jigglerSettings,
+  };
+}
+
+function showMainWindow() {
+  if (!win || win.isDestroyed()) {
+    return;
+  }
+
+  if (win.isMinimized()) {
+    win.restore();
+  }
+
+  win.show();
+  win.focus();
+}
+
+function buildTrayMenu() {
+  return Menu.buildFromTemplate([
+    {
+      label: isJigglerEnabled ? 'Выключить (F8)' : 'Включить (F8)',
+      click: () => toggleJiggler(),
+    },
+    {
+      label: 'Настройки',
+      click: () => showMainWindow(),
+    },
+    { type: 'separator' },
+    {
+      label: 'Выход',
+      click: () => {
+        isQuitting = true;
+        app.quit();
+      },
+    },
+  ]);
+}
+
+function updateTray() {
+  if (!tray) {
+    return;
+  }
+
+  tray.setImage(getTrayIconPath(isJigglerEnabled));
+  tray.setToolTip(
+    `RYBAKIČ Mouse Jiggler: ${isJigglerEnabled ? 'включен (F8)' : 'выключен (F8)'}`,
+  );
+  tray.setContextMenu(buildTrayMenu());
+}
+
+function broadcastState() {
+  if (win && !win.isDestroyed()) {
+    win.webContents.send('jiggler:state', getState());
+  }
+
+  updateTray();
+}
+
+function buildJigglerScript(settings) {
+  return `
+$ErrorActionPreference = 'Stop'
+
+Add-Type -TypeDefinition @"
+using System;
+using System.Runtime.InteropServices;
+
+public static class MouseNative {
+    public const uint MOUSEEVENTF_MOVE = 0x0001;
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct POINT {
+        public int X;
+        public int Y;
+    }
+
+    [DllImport("user32.dll")]
+    public static extern bool SetCursorPos(int x, int y);
+
+    [DllImport("user32.dll")]
+    public static extern bool GetCursorPos(out POINT point);
+
+    [DllImport("user32.dll")]
+    public static extern void mouse_event(uint dwFlags, int dx, int dy, uint dwData, UIntPtr dwExtraInfo);
+
+    public static POINT GetCursorPosition() {
+        POINT point;
+        GetCursorPos(out point);
+        return point;
+    }
+}
+"@
+
+$deviation = ${settings.deviation}
+$frequencyMs = ${settings.frequency}
+$smoothness = ${settings.smoothness}
+
+while ($true) {
+    $dx = Get-Random -Minimum (-$deviation) -Maximum ($deviation + 1)
+    $dy = Get-Random -Minimum (-$deviation) -Maximum ($deviation + 1)
+
+    if ($dx -eq 0 -and $dy -eq 0) {
+        $dx = 1
+    }
+
+    $cycleMs = [Math]::Max([int]$frequencyMs, 100)
+    $stepCount = [Math]::Max($smoothness, 1)
+
+    # Короткое "касание" мыши: быстро ушли/вернулись и дали курсору свободно жить до следующего цикла.
+    $motionBudgetMs = [Math]::Min([int]($cycleMs * 0.35), 220)
+    $stepDelayMs = [Math]::Max([int]($motionBudgetMs / (2 * $stepCount)), 1)
+    $motionSpentMs = $stepDelayMs * 2 * $stepCount
+
+    $movedX = 0
+    $movedY = 0
+    for ($i = 1; $i -le $stepCount; $i++) {
+        $nextX = [int][Math]::Round(($dx * $i) / $stepCount)
+        $nextY = [int][Math]::Round(($dy * $i) / $stepCount)
+        $incX = $nextX - $movedX
+        $incY = $nextY - $movedY
+
+        [MouseNative]::mouse_event([MouseNative]::MOUSEEVENTF_MOVE, $incX, $incY, 0, [UIntPtr]::Zero)
+
+        $movedX = $nextX
+        $movedY = $nextY
+        Start-Sleep -Milliseconds $stepDelayMs
+    }
+
+    $returnedX = 0
+    $returnedY = 0
+    for ($i = 1; $i -le $stepCount; $i++) {
+        $nextX = [int][Math]::Round(((-$dx) * $i) / $stepCount)
+        $nextY = [int][Math]::Round(((-$dy) * $i) / $stepCount)
+        $incX = $nextX - $returnedX
+        $incY = $nextY - $returnedY
+
+        [MouseNative]::mouse_event([MouseNative]::MOUSEEVENTF_MOVE, $incX, $incY, 0, [UIntPtr]::Zero)
+
+        $returnedX = $nextX
+        $returnedY = $nextY
+        Start-Sleep -Milliseconds $stepDelayMs
+    }
+
+    $restMs = $cycleMs - $motionSpentMs
+    if ($restMs -gt 0) {
+        Start-Sleep -Milliseconds $restMs
+    }
+}
+`;
+}
+
+function stopJiggler() {
+  const processToStop = jigglerProcess;
+  jigglerProcess = null;
+
+  if (processToStop) {
+    processToStop.removeAllListeners('exit');
+    processToStop.kill();
+  }
+
+  isJigglerEnabled = false;
+  broadcastState();
+}
+
+function startJiggler() {
+  if (jigglerProcess) {
+    stopJiggler();
+  }
+
+  const script = buildJigglerScript(jigglerSettings);
+
+  const nextProcess = spawn(
+    'powershell.exe',
+    ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden', '-Command', script],
+    { stdio: 'ignore' },
+  );
+
+  jigglerProcess = nextProcess;
+
+  nextProcess.once('exit', () => {
+    if (jigglerProcess !== nextProcess) {
+      return;
+    }
+
+    jigglerProcess = null;
+    if (isJigglerEnabled) {
+      isJigglerEnabled = false;
+      broadcastState();
+    }
+  });
+
+  isJigglerEnabled = true;
+  broadcastState();
+}
+
+function toggleJiggler() {
+  if (isJigglerEnabled) {
+    stopJiggler();
+    return;
+  }
+
+  startJiggler();
+}
+
+function registerIpcHandlers() {
+  ipcMain.handle('jiggler:get-state', () => getState());
+
+  ipcMain.handle('jiggler:update-settings', (_event, rawSettings) => {
+    jigglerSettings = sanitizeSettings(rawSettings);
+
+    if (isJigglerEnabled) {
+      stopJiggler();
+      return getState();
+    }
+
+    broadcastState();
+    return getState();
+  });
+}
+
+function createWindow() {
+  win = new BrowserWindow({
+    width: 560,
+    height: 460,
+    resizable: false,
+    minimizable: false,
+    maximizable: false,
+    fullscreenable: false,
+    title: 'RYBAKIČ - Mouse Jiggler',
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  });
+  win.removeMenu();
+
+  if (!app.isPackaged) {
+    win.loadURL('http://localhost:4200');
+    // win.webContents.openDevTools({ mode: 'detach' });
+  } else {
+    const indexPath = path.join(app.getAppPath(), 'dist', 'rybakic-jiggler', 'browser', 'index.html');
+    win.loadFile(indexPath);
+  }
+
+  win.on('close', (event) => {
+    if (isQuitting) {
+      return;
+    }
+
+    event.preventDefault();
+    win.hide();
+  });
+
+  win.webContents.on('did-finish-load', () => {
+    broadcastState();
+  });
+}
+
+function createTray() {
+  tray = new Tray(getTrayIconPath(false));
+  tray.setContextMenu(buildTrayMenu());
+  tray.on('double-click', () => showMainWindow());
+  tray.on('click', () => showMainWindow());
+  updateTray();
+}
+
+app.setAppUserModelId('com.rybakic.mousejiggler');
+
+if (!hasSingleInstanceLock) {
+  app.quit();
+} else {
+  app.on('second-instance', () => {
+    showMainWindow();
+  });
+}
+
+app.whenReady().then(() => {
+  if (!hasSingleInstanceLock) {
+    return;
+  }
+
+  createWindow();
+  createTray();
+  registerIpcHandlers();
+  globalShortcut.register('F8', () => toggleJiggler());
+});
+
+app.on('activate', () => {
+  showMainWindow();
+});
+
+app.on('before-quit', () => {
+  isQuitting = true;
+  globalShortcut.unregisterAll();
+  stopJiggler();
+});
+
+app.on('window-all-closed', () => {});

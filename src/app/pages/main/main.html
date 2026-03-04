@@ -1,0 +1,33 @@
+<form class="form grid gap-4 p-4" [formGroup]="form">
+  <p class="title">
+    <strong class="strong" [class]="statusClass()">
+      <tui-pulse [playing]="true" [class]="statusClass()" />
+      {{ isEnabled() ? 'Включено' : 'Выключено' }}
+    </strong>
+    (переключение: F8)
+  </p>
+
+  <tui-textfield>
+    <label tuiLabel>Отклонение</label>
+
+    <input prefix="px " tuiInputSlider [max]="100" [min]="1" formControlName="deviation" />
+
+    <input tuiSlider type="range" [step]="1" formControlName="deviation" />
+  </tui-textfield>
+
+  <tui-textfield>
+    <label tuiLabel>Частота</label>
+
+    <input prefix="ms " tuiInputSlider [max]="10000" [min]="100" formControlName="frequency" />
+
+    <input tuiSlider type="range" [step]="100" formControlName="frequency" />
+  </tui-textfield>
+
+  <tui-textfield>
+    <label tuiLabel>Плавность</label>
+
+    <input prefix="sl " tuiInputSlider [max]="20" [min]="1" formControlName="smoothness" />
+
+    <input tuiSlider type="range" [step]="1" formControlName="smoothness" />
+  </tui-textfield>
+</form>
