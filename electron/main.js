@@ -12,6 +12,11 @@ const hasSingleInstanceLock = app.requestSingleInstanceLock();
 const IS_WINDOWS = process.platform === 'win32';
 const IS_MACOS = process.platform === 'darwin';
 
+// Mitigate early V8 init crashes observed on macOS by disabling compile hints.
+if (IS_MACOS) {
+  app.commandLine.appendSwitch('disable-features', 'V8CompileHints');
+}
+
 const DEFAULT_SETTINGS = {
   deviation: 10,
   frequency: 1000,
