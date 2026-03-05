@@ -83,19 +83,3 @@ npm run build:win
 `System Settings -> Privacy & Security -> Accessibility`.
 
 Добавьте приложение в список разрешенных.
-
-## Автоматические релизы
-
-После пуша в default-ветку GitHub Actions автоматически:
-
-- повышает версию в `package.json` и `package-lock.json`;
-- создает коммит `chore(release): vX.Y.Z`;
-- ставит git-тег `vX.Y.Z`;
-- запускает кроссплатформенную сборку (`win64` и `macOS universal`);
-- публикует GitHub Release с артефактами.
-
-Правила повышения версии по сообщениям коммитов:
-
-- `BREAKING CHANGE` или `!:` -> `major`;
-- `feat:` -> `minor`;
-- иначе -> `patch`.
