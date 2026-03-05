@@ -41,7 +41,7 @@ npm run build:win
 
 Installer output:
 
-- `release/RYBAKIČ Mouse Jiggler Setup.exe`
+- `release/setup_win64.exe`
 
 ## Important (Windows symlink issue)
 
@@ -74,6 +74,6 @@ npm run build:win
 
 Only this file is needed:
 
-- `release/RYBAKIČ Mouse Jiggler Setup.exe`
+- `release/setup_win64.exe`
 
 No need to send `win-unpacked` folder.

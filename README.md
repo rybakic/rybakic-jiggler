@@ -1,6 +1,6 @@
 # RYBAKIČ Mouse Jiggler
 
-Простое десктопное приложение для имитации активности мыши на Windows и macOS.
+Простое десктопное приложение для имитации активности мыши на Windows.
 
 ## Демо
 
@@ -19,7 +19,7 @@
 
 ## Скачать приложение
 
-Готовые пакеты для Windows (`.exe`) и macOS (`.dmg`) публикуются в разделе **Releases** этого репозитория на GitHub.
+Готовые пакеты для Windows (`.exe`) публикуются в разделе **Releases** этого репозитория на GitHub.
 
 Откройте страницу репозитория -> **Releases** -> скачайте последний setup-файл.
 
@@ -40,25 +40,7 @@ npm run build:win
 
 Результат:
 
-- `release/setup_win64`
-
-### Сборка для macOS
-
-```bash
-npm run build:mac
-```
-
-Результат:
-
-- `release/setup_macOS.dmg`
-
-### Сборка сразу для обеих платформ
-
-```bash
-npm run build:all
-```
-
-Примечание: для `macOS`-пакетов сборку нужно запускать на macOS.
+- `release/setup_win64.exe`
 
 ## Примечания по сборке (Windows)
 
@@ -75,11 +57,3 @@ npm run build:all
 Remove-Item "$env:LOCALAPPDATA\electron-builder\Cache\winCodeSign" -Recurse -Force
 npm run build:win
 ``` 
-
-## Примечания для macOS
-
-Для управления курсором приложению нужен доступ:
-
-`System Settings -> Privacy & Security -> Accessibility`.
-
-Добавьте приложение в список разрешенных.

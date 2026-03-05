@@ -10,13 +10,6 @@ let isJigglerEnabled = false;
 let isQuitting = false;
 const hasSingleInstanceLock = app.requestSingleInstanceLock();
 const IS_WINDOWS = process.platform === 'win32';
-const IS_MACOS = process.platform === 'darwin';
-
-// Mitigate early V8 init crashes observed on macOS by disabling compile hints.
-if (IS_MACOS) {
-  app.commandLine.appendSwitch('disable-features', 'V8CompileHints');
-  app.commandLine.appendSwitch('js-flags', '--no-compile-hints --no-compilation-cache');
-}
 
 const DEFAULT_SETTINGS = {
   deviation: 10,
@@ -28,11 +21,6 @@ const TRAY_ICON_FILES = {
   active: 'active.ico',
   disabled: 'disable.ico',
   fallback: 'icon.ico',
-};
-const MAC_TRAY_ICON_FILES = {
-  active: 'active.icns',
-  disabled: 'disable.icns',
-  fallback: 'icon.icns',
 };
 
 let jigglerSettings = { ...DEFAULT_SETTINGS };
@@ -60,19 +48,6 @@ function resolvePublicAsset(name) {
 }
 
 function getTrayIconPath(enabled) {
-  if (IS_MACOS) {
-    const macPreferred = resolvePublicAsset(enabled ? MAC_TRAY_ICON_FILES.active : MAC_TRAY_ICON_FILES.disabled);
-    const macFallback = resolvePublicAsset(MAC_TRAY_ICON_FILES.fallback);
-
-    if (fs.existsSync(macPreferred)) {
-      return macPreferred;
-    }
-
-    if (fs.existsSync(macFallback)) {
-      return macFallback;
-    }
-  }
-
   const preferred = resolvePublicAsset(enabled ? TRAY_ICON_FILES.active : TRAY_ICON_FILES.disabled);
   const fallback = resolvePublicAsset(TRAY_ICON_FILES.fallback);
 
@@ -258,83 +233,6 @@ while ($true) {
 `;
 }
 
-function buildMacJigglerScript(settings) {
-  return `
-const app = Application.currentApplication();
-app.includeStandardAdditions = true;
-
-ObjC.import('Cocoa');
-ObjC.import('ApplicationServices');
-
-function getCursorPosition() {
-    const point = $.NSEvent.mouseLocation;
-    const height = $.NSScreen.mainScreen.frame.size.height;
-
-    return {
-        x: Number(point.x),
-        y: Number(height - point.y),
-    };
-}
-
-function moveMouse(x, y) {
-    const point = $.CGPointMake(x, y);
-    const event = $.CGEventCreateMouseEvent(
-        null,
-        $.kCGEventMouseMoved,
-        point,
-        $.kCGMouseButtonLeft
-    );
-
-    $.CGEventPost($.kCGHIDEventTap, event);
-    $.CFRelease(event);
-}
-
-function sleepMs(milliseconds) {
-    app.delay(milliseconds / 1000);
-}
-
-const deviation = ${settings.deviation};
-const frequencyMs = ${settings.frequency};
-const smoothness = ${settings.smoothness};
-
-while (true) {
-    const base = getCursorPosition();
-
-    let dx = Math.floor(Math.random() * (deviation * 2 + 1)) - deviation;
-    let dy = Math.floor(Math.random() * (deviation * 2 + 1)) - deviation;
-
-    if (dx === 0 && dy === 0) {
-        dx = 1;
-    }
-
-    const cycleMs = Math.max(frequencyMs, 100);
-    const stepCount = Math.max(smoothness, 1);
-    const motionBudgetMs = Math.min(Math.floor(cycleMs * 0.35), 220);
-    const stepDelayMs = Math.max(Math.floor(motionBudgetMs / (2 * stepCount)), 1);
-    const motionSpentMs = stepDelayMs * 2 * stepCount;
-
-    for (let i = 1; i <= stepCount; i += 1) {
-        const x = base.x + Math.round((dx * i) / stepCount);
-        const y = base.y + Math.round((dy * i) / stepCount);
-        moveMouse(x, y);
-        sleepMs(stepDelayMs);
-    }
-
-    for (let i = 1; i <= stepCount; i += 1) {
-        const x = base.x + dx - Math.round((dx * i) / stepCount);
-        const y = base.y + dy - Math.round((dy * i) / stepCount);
-        moveMouse(x, y);
-        sleepMs(stepDelayMs);
-    }
-
-    const restMs = cycleMs - motionSpentMs;
-    if (restMs > 0) {
-        sleepMs(restMs);
-    }
-}
-`;
-}
-
 function spawnJigglerProcess(settings) {
   if (IS_WINDOWS) {
     return spawn(
@@ -350,12 +248,6 @@ function spawnJigglerProcess(settings) {
       ],
       { stdio: 'ignore' },
     );
-  }
-
-  if (IS_MACOS) {
-    return spawn('osascript', ['-l', 'JavaScript', '-e', buildMacJigglerScript(settings)], {
-      stdio: 'ignore',
-    });
   }
 
   return null;
@@ -482,35 +374,39 @@ function createTray() {
   updateTray();
 }
 
-app.setAppUserModelId('com.rybakic.mousejiggler');
-
-if (!hasSingleInstanceLock) {
-  app.quit();
+if (!IS_WINDOWS) {
+  app.whenReady().then(() => app.quit());
 } else {
-  app.on('second-instance', () => {
-    showMainWindow();
-  });
-}
+  app.setAppUserModelId('com.rybakic.mousejiggler');
 
-app.whenReady().then(() => {
   if (!hasSingleInstanceLock) {
-    return;
+    app.quit();
+  } else {
+    app.on('second-instance', () => {
+      showMainWindow();
+    });
   }
 
-  createWindow();
-  createTray();
-  registerIpcHandlers();
-  globalShortcut.register('F8', () => toggleJiggler());
-});
+  app.whenReady().then(() => {
+    if (!hasSingleInstanceLock) {
+      return;
+    }
 
-app.on('activate', () => {
-  showMainWindow();
-});
+    createWindow();
+    createTray();
+    registerIpcHandlers();
+    globalShortcut.register('F8', () => toggleJiggler());
+  });
 
-app.on('before-quit', () => {
-  isQuitting = true;
-  globalShortcut.unregisterAll();
-  stopJiggler();
-});
+  app.on('activate', () => {
+    showMainWindow();
+  });
 
-app.on('window-all-closed', () => {});
+  app.on('before-quit', () => {
+    isQuitting = true;
+    globalShortcut.unregisterAll();
+    stopJiggler();
+  });
+
+  app.on('window-all-closed', () => {});
+}
