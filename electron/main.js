@@ -15,6 +15,7 @@ const IS_MACOS = process.platform === 'darwin';
 // Mitigate early V8 init crashes observed on macOS by disabling compile hints.
 if (IS_MACOS) {
   app.commandLine.appendSwitch('disable-features', 'V8CompileHints');
+  app.commandLine.appendSwitch('js-flags', '--no-compile-hints --no-compilation-cache');
 }
 
 const DEFAULT_SETTINGS = {
