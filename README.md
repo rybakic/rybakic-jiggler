@@ -34,7 +34,7 @@ npm run dev
 
 ## Сборка установщика
 
-```bash
+```bash 
 npm run build:win
 ```
 
