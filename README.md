@@ -27,7 +27,7 @@
 
 ## Быстрый старт (разработка)
 
-```bash 
+```bash
 npm install
 npm run dev 
 ```
