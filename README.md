@@ -40,7 +40,7 @@ npm run build:win
 
 Результат:
 
-- `release/rybakic_mouse_jiggler_setup.exe`
+- `release/setup_win64`
 
 ## Примечания по сборке (Windows)
 
