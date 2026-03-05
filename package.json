@@ -18,7 +18,10 @@
     "build:mac": "npm run build:web && electron-builder -m --universal --publish never",
     "build:all": "npm run build:web && electron-builder -w --x64 -m --universal --publish never",
     "watch": "ng build --watch --configuration development",
-    "test": "ng test"
+    "test": "ng test",
+    "release:patch": "npm version patch",
+    "release:minor": "npm version minor",
+    "release:major": "npm version major"
   },
   "dependencies": {
     "@angular/cdk": "^21.0.0",
