@@ -76,7 +76,7 @@
       "signAndEditExecutable": true
     },
     "nsis": {
-      "artifactName": "Setup_win64.${ext}",
+      "artifactName": "setup_win64.${ext}",
       "installerIcon": "public/disable.ico",
       "uninstallerIcon": "public/disable.ico",
       "installerHeaderIcon": "public/disable.ico",
