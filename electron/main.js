@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Tray, Menu, globalShortcut, ipcMain } = require('electron');
+const { app, BrowserWindow, Tray, Menu, globalShortcut, ipcMain, nativeImage } = require('electron');
 const { spawn } = require('child_process');
 const fs = require('fs');
 const path = require('path');
@@ -9,6 +9,8 @@ let jigglerProcess = null;
 let isJigglerEnabled = false;
 let isQuitting = false;
 const hasSingleInstanceLock = app.requestSingleInstanceLock();
+const IS_WINDOWS = process.platform === 'win32';
+const IS_MACOS = process.platform === 'darwin';
 
 const DEFAULT_SETTINGS = {
   deviation: 10,
@@ -20,6 +22,11 @@ const TRAY_ICON_FILES = {
   active: 'active.ico',
   disabled: 'disable.ico',
   fallback: 'icon.ico',
+};
+const MAC_TRAY_ICON_FILES = {
+  active: 'active.icns',
+  disabled: 'disable.icns',
+  fallback: 'icon.icns',
 };
 
 let jigglerSettings = { ...DEFAULT_SETTINGS };
@@ -47,6 +54,19 @@ function resolvePublicAsset(name) {
 }
 
 function getTrayIconPath(enabled) {
+  if (IS_MACOS) {
+    const macPreferred = resolvePublicAsset(enabled ? MAC_TRAY_ICON_FILES.active : MAC_TRAY_ICON_FILES.disabled);
+    const macFallback = resolvePublicAsset(MAC_TRAY_ICON_FILES.fallback);
+
+    if (fs.existsSync(macPreferred)) {
+      return macPreferred;
+    }
+
+    if (fs.existsSync(macFallback)) {
+      return macFallback;
+    }
+  }
+
   const preferred = resolvePublicAsset(enabled ? TRAY_ICON_FILES.active : TRAY_ICON_FILES.disabled);
   const fallback = resolvePublicAsset(TRAY_ICON_FILES.fallback);
 
@@ -55,6 +75,28 @@ function getTrayIconPath(enabled) {
   }
 
   return fallback;
+}
+
+function getTrayIcon(enabled) {
+  const image = nativeImage.createFromPath(getTrayIconPath(enabled));
+  if (!image.isEmpty()) {
+    return image;
+  }
+
+  return nativeImage.createFromDataURL(
+    'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4////fwAJ+wP9KobjigAAAABJRU5ErkJggg==',
+  );
+}
+
+function getWindowIconPath() {
+  const preferred = resolvePublicAsset(TRAY_ICON_FILES.fallback);
+  const alternate = resolvePublicAsset(TRAY_ICON_FILES.active);
+
+  if (fs.existsSync(preferred)) {
+    return preferred;
+  }
+
+  return alternate;
 }
 
 function getState() {
@@ -103,7 +145,7 @@ function updateTray() {
     return;
   }
 
-  tray.setImage(getTrayIconPath(isJigglerEnabled));
+  tray.setImage(getTrayIcon(isJigglerEnabled));
   tray.setToolTip(
     `RYBAKIČ Mouse Jiggler: ${isJigglerEnabled ? 'включен (F8)' : 'выключен (F8)'}`,
   );
@@ -210,6 +252,109 @@ while ($true) {
 `;
 }
 
+function buildMacJigglerScript(settings) {
+  return `
+const app = Application.currentApplication();
+app.includeStandardAdditions = true;
+
+ObjC.import('Cocoa');
+ObjC.import('ApplicationServices');
+
+function getCursorPosition() {
+    const point = $.NSEvent.mouseLocation;
+    const height = $.NSScreen.mainScreen.frame.size.height;
+
+    return {
+        x: Number(point.x),
+        y: Number(height - point.y),
+    };
+}
+
+function moveMouse(x, y) {
+    const point = $.CGPointMake(x, y);
+    const event = $.CGEventCreateMouseEvent(
+        null,
+        $.kCGEventMouseMoved,
+        point,
+        $.kCGMouseButtonLeft
+    );
+
+    $.CGEventPost($.kCGHIDEventTap, event);
+    $.CFRelease(event);
+}
+
+function sleepMs(milliseconds) {
+    app.delay(milliseconds / 1000);
+}
+
+const deviation = ${settings.deviation};
+const frequencyMs = ${settings.frequency};
+const smoothness = ${settings.smoothness};
+
+while (true) {
+    const base = getCursorPosition();
+
+    let dx = Math.floor(Math.random() * (deviation * 2 + 1)) - deviation;
+    let dy = Math.floor(Math.random() * (deviation * 2 + 1)) - deviation;
+
+    if (dx === 0 && dy === 0) {
+        dx = 1;
+    }
+
+    const cycleMs = Math.max(frequencyMs, 100);
+    const stepCount = Math.max(smoothness, 1);
+    const motionBudgetMs = Math.min(Math.floor(cycleMs * 0.35), 220);
+    const stepDelayMs = Math.max(Math.floor(motionBudgetMs / (2 * stepCount)), 1);
+    const motionSpentMs = stepDelayMs * 2 * stepCount;
+
+    for (let i = 1; i <= stepCount; i += 1) {
+        const x = base.x + Math.round((dx * i) / stepCount);
+        const y = base.y + Math.round((dy * i) / stepCount);
+        moveMouse(x, y);
+        sleepMs(stepDelayMs);
+    }
+
+    for (let i = 1; i <= stepCount; i += 1) {
+        const x = base.x + dx - Math.round((dx * i) / stepCount);
+        const y = base.y + dy - Math.round((dy * i) / stepCount);
+        moveMouse(x, y);
+        sleepMs(stepDelayMs);
+    }
+
+    const restMs = cycleMs - motionSpentMs;
+    if (restMs > 0) {
+        sleepMs(restMs);
+    }
+}
+`;
+}
+
+function spawnJigglerProcess(settings) {
+  if (IS_WINDOWS) {
+    return spawn(
+      'powershell.exe',
+      [
+        '-NoProfile',
+        '-ExecutionPolicy',
+        'Bypass',
+        '-WindowStyle',
+        'Hidden',
+        '-Command',
+        buildJigglerScript(settings),
+      ],
+      { stdio: 'ignore' },
+    );
+  }
+
+  if (IS_MACOS) {
+    return spawn('osascript', ['-l', 'JavaScript', '-e', buildMacJigglerScript(settings)], {
+      stdio: 'ignore',
+    });
+  }
+
+  return null;
+}
+
 function stopJiggler() {
   const processToStop = jigglerProcess;
   jigglerProcess = null;
@@ -228,13 +373,12 @@ function startJiggler() {
     stopJiggler();
   }
 
-  const script = buildJigglerScript(jigglerSettings);
-
-  const nextProcess = spawn(
-    'powershell.exe',
-    ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden', '-Command', script],
-    { stdio: 'ignore' },
-  );
+  const nextProcess = spawnJigglerProcess(jigglerSettings);
+  if (!nextProcess) {
+    isJigglerEnabled = false;
+    broadcastState();
+    return;
+  }
 
   jigglerProcess = nextProcess;
 
@@ -280,7 +424,7 @@ function registerIpcHandlers() {
 }
 
 function createWindow() {
-  win = new BrowserWindow({
+  const windowOptions = {
     width: 560,
     height: 460,
     resizable: false,
@@ -293,7 +437,13 @@ function createWindow() {
       contextIsolation: true,
       nodeIntegration: false,
     },
-  });
+  };
+
+  if (IS_WINDOWS) {
+    windowOptions.icon = getWindowIconPath();
+  }
+
+  win = new BrowserWindow(windowOptions);
   win.removeMenu();
 
   if (!app.isPackaged) {
@@ -319,7 +469,7 @@ function createWindow() {
 }
 
 function createTray() {
-  tray = new Tray(getTrayIconPath(false));
+  tray = new Tray(getTrayIcon(false));
   tray.setContextMenu(buildTrayMenu());
   tray.on('double-click', () => showMainWindow());
   tray.on('click', () => showMainWindow());

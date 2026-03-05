@@ -15,6 +15,8 @@
     "build": "ng build --base-href ./",
     "build:web": "ng build --base-href ./",
     "build:win": "npm run build:web && electron-builder -w --x64",
+    "build:mac": "npm run build:web && electron-builder -m --universal",
+    "build:all": "npm run build:web && electron-builder -w --x64 -m --universal",
     "watch": "ng build --watch --configuration development",
     "test": "ng test"
   },
@@ -74,6 +76,11 @@
       "target": "nsis",
       "icon": "public/active.ico",
       "signAndEditExecutable": true
+    },
+    "mac": {
+      "target": "dmg",
+      "icon": "public/icon.icns",
+      "artifactName": "setup_macOS.${ext}"
     },
     "nsis": {
       "artifactName": "setup_win64.${ext}",

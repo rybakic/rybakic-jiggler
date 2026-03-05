@@ -1,6 +1,6 @@
 # RYBAKIČ Mouse Jiggler
 
-Простое десктопное приложение для имитации активности мыши на Windows.
+Простое десктопное приложение для имитации активности мыши на Windows и macOS.
 
 ## Демо
 
@@ -19,7 +19,7 @@
 
 ## Скачать приложение
 
-Готовые `.exe` файлы публикуются в разделе **Releases** этого репозитория на GitHub.
+Готовые пакеты для Windows (`.exe`) и macOS (`.dmg`) публикуются в разделе **Releases** этого репозитория на GitHub.
 
 Откройте страницу репозитория -> **Releases** -> скачайте последний setup-файл.
 
@@ -42,6 +42,24 @@ npm run build:win
 
 - `release/setup_win64`
 
+### Сборка для macOS
+
+```bash
+npm run build:mac
+```
+
+Результат:
+
+- `release/setup_macOS.dmg`
+
+### Сборка сразу для обеих платформ
+
+```bash
+npm run build:all
+```
+
+Примечание: для `macOS`-пакетов сборку нужно запускать на macOS.
+
 ## Примечания по сборке (Windows)
 
 При `signAndEditExecutable: true` сборка может падать с ошибкой `Cannot create symbolic link` (распаковка кэша winCodeSign).
@@ -57,3 +75,27 @@ npm run build:win
 Remove-Item "$env:LOCALAPPDATA\electron-builder\Cache\winCodeSign" -Recurse -Force
 npm run build:win
 ``` 
+
+## Примечания для macOS
+
+Для управления курсором приложению нужен доступ:
+
+`System Settings -> Privacy & Security -> Accessibility`.
+
+Добавьте приложение в список разрешенных.
+
+## Автоматические релизы
+
+После пуша в default-ветку GitHub Actions автоматически:
+
+- повышает версию в `package.json` и `package-lock.json`;
+- создает коммит `chore(release): vX.Y.Z`;
+- ставит git-тег `vX.Y.Z`;
+- запускает кроссплатформенную сборку (`win64` и `macOS universal`);
+- публикует GitHub Release с артефактами.
+
+Правила повышения версии по сообщениям коммитов:
+
+- `BREAKING CHANGE` или `!:` -> `major`;
+- `feat:` -> `minor`;
+- иначе -> `patch`.
