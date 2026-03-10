@@ -7,21 +7,23 @@
     (переключение: F8)
   </p>
 
-  <tui-textfield>
-    <label tuiLabel>Отклонение</label>
+  <div class="row grid grid-cols-2 gap-4">
+    <tui-textfield>
+      <label tuiLabel>Отклонение</label>
 
-    <input prefix="px " tuiInputSlider [max]="100" [min]="1" formControlName="deviation" />
+      <input prefix="px " tuiInputSlider [max]="100" [min]="1" formControlName="deviation" />
 
-    <input tuiSlider type="range" [step]="1" formControlName="deviation" />
-  </tui-textfield>
+      <input tuiSlider type="range" [step]="1" formControlName="deviation" />
+    </tui-textfield>
 
-  <tui-textfield>
-    <label tuiLabel>Частота</label>
+    <tui-textfield>
+      <label tuiLabel>Частота</label>
 
-    <input prefix="ms " tuiInputSlider [max]="10000" [min]="100" formControlName="frequency" />
+      <input prefix="ms " tuiInputSlider [max]="10000" [min]="100" formControlName="frequency" />
 
-    <input tuiSlider type="range" [step]="100" formControlName="frequency" />
-  </tui-textfield>
+      <input tuiSlider type="range" [step]="100" formControlName="frequency" />
+    </tui-textfield>
+  </div>
 
   <tui-textfield>
     <label tuiLabel>Плавность</label>
@@ -30,4 +32,28 @@
 
     <input tuiSlider type="range" [step]="1" formControlName="smoothness" />
   </tui-textfield>
+
+  <label class="focus-toggle">
+    <input size="s" tuiCheckbox type="checkbox" formControlName="keepFocusOnTitle" />
+    Всегда возвращать фокус на окно с заголовком:
+  </label>
+
+  <label class="text-field">
+    <span class="text-field__label">Часть заголовка окна</span>
+    <input
+      class="text-field__input"
+      type="text"
+      placeholder="например: VMware Horizon или Citrix"
+      formControlName="foregroundWindowTitle"
+    />
+  </label>
+
+  <tui-textfield>
+    <label tuiLabel>Интервал возврата фокуса</label>
+
+    <input prefix="ms " tuiInputSlider [max]="10000" [min]="1000" formControlName="focusInterval" />
+
+    <input tuiSlider type="range" [step]="100" formControlName="focusInterval" />
+  </tui-textfield>
 </form>
+пва

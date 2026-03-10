@@ -15,6 +15,9 @@ const DEFAULT_SETTINGS = {
   deviation: 10,
   frequency: 1000,
   smoothness: 10,
+  keepFocusOnTitle: false,
+  focusInterval: 3000,
+  foregroundWindowTitle: '',
 };
 
 const TRAY_ICON_FILES = {
@@ -36,6 +39,9 @@ function sanitizeSettings(raw) {
     deviation: clamp(Math.round(Number(input.deviation) || DEFAULT_SETTINGS.deviation), 1, 100),
     frequency: clamp(Math.round(Number(input.frequency) || DEFAULT_SETTINGS.frequency), 100, 10000),
     smoothness: clamp(Math.round(Number(input.smoothness) || DEFAULT_SETTINGS.smoothness), 1, 20),
+    keepFocusOnTitle: Boolean(input.keepFocusOnTitle),
+    focusInterval: clamp(Math.round(Number(input.focusInterval) || DEFAULT_SETTINGS.focusInterval), 1000, 10000),
+    foregroundWindowTitle: String(input.foregroundWindowTitle ?? '').slice(0, 200),
   };
 }
 
@@ -142,21 +148,36 @@ function broadcastState() {
 }
 
 function buildJigglerScript(settings) {
+  const titleFilter = String(settings.foregroundWindowTitle ?? '').replace(/'/g, "''");
+
   return `
 $ErrorActionPreference = 'Stop'
 
 Add-Type -TypeDefinition @"
 using System;
 using System.Runtime.InteropServices;
+using System.Text;
+using System.Threading;
 
 public static class MouseNative {
     public const uint MOUSEEVENTF_MOVE = 0x0001;
+    public const int SW_SHOW = 5;
+    public const int SW_MAXIMIZE = 3;
 
     [StructLayout(LayoutKind.Sequential)]
     public struct POINT {
         public int X;
         public int Y;
     }
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct RECT {
+        public int Left;
+        public int Top;
+        public int Right;
+        public int Bottom;
+    }
+
 
     [DllImport("user32.dll")]
     public static extern bool SetCursorPos(int x, int y);
@@ -165,12 +186,110 @@ public static class MouseNative {
     public static extern bool GetCursorPos(out POINT point);
 
     [DllImport("user32.dll")]
+    public static extern IntPtr GetForegroundWindow();
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    public static extern int GetWindowText(IntPtr hWnd, StringBuilder text, int count);
+
+    [DllImport("user32.dll")]
+    public static extern bool EnumWindows(EnumWindowsProc lpEnumFunc, IntPtr lParam);
+
+    [DllImport("user32.dll")]
+    public static extern bool IsWindowVisible(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
+    public static extern bool SetForegroundWindow(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
+    public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+
+    [DllImport("user32.dll")]
+    public static extern bool GetWindowRect(IntPtr hWnd, out RECT rect);
+
+    [DllImport("user32.dll")]
     public static extern void mouse_event(uint dwFlags, int dx, int dy, uint dwData, UIntPtr dwExtraInfo);
+
+    public delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
 
     public static POINT GetCursorPosition() {
         POINT point;
         GetCursorPos(out point);
         return point;
+    }
+
+    public static string GetForegroundWindowTitle() {
+        IntPtr hwnd = GetForegroundWindow();
+        if (hwnd == IntPtr.Zero) {
+            return string.Empty;
+        }
+
+        var buffer = new StringBuilder(512);
+        int length = GetWindowText(hwnd, buffer, buffer.Capacity);
+        if (length <= 0) {
+            return string.Empty;
+        }
+
+        return buffer.ToString();
+    }
+
+
+    public static IntPtr FindWindowByTitleContains(string filter) {
+        if (string.IsNullOrWhiteSpace(filter)) {
+            return IntPtr.Zero;
+        }
+
+        IntPtr result = IntPtr.Zero;
+        EnumWindows((hWnd, lParam) => {
+            if (!IsWindowVisible(hWnd)) {
+                return true;
+            }
+
+            var buffer = new StringBuilder(512);
+            int length = GetWindowText(hWnd, buffer, buffer.Capacity);
+            if (length <= 0) {
+                return true;
+            }
+
+            var title = buffer.ToString();
+            if (title.IndexOf(filter, StringComparison.OrdinalIgnoreCase) >= 0) {
+                result = hWnd;
+                return false;
+            }
+
+            return true;
+        }, IntPtr.Zero);
+
+        return result;
+    }
+
+    public static void MoveCursorToWindowCorners(IntPtr hWnd) {
+        if (hWnd == IntPtr.Zero) {
+            return;
+        }
+
+        RECT rect;
+        if (!GetWindowRect(hWnd, out rect)) {
+            return;
+        }
+
+        int width = rect.Right - rect.Left;
+        int height = rect.Bottom - rect.Top;
+        int insetX = Math.Max(24, width / 5);
+        int insetY = Math.Max(24, height / 5);
+
+        int left = rect.Left + insetX;
+        int top = rect.Top + insetY;
+        int right = rect.Right - insetX;
+        int bottom = rect.Bottom - insetY;
+
+        POINT original;
+        GetCursorPos(out original);
+
+        SetCursorPos(left, top);
+        SetCursorPos(right, top);
+        SetCursorPos(right, bottom);
+        SetCursorPos(left, bottom);
+        SetCursorPos(original.X, original.Y);
     }
 }
 "@
@@ -178,8 +297,28 @@ public static class MouseNative {
 $deviation = ${settings.deviation}
 $frequencyMs = ${settings.frequency}
 $smoothness = ${settings.smoothness}
+$keepFocusOnTitle = ${settings.keepFocusOnTitle ? '$true' : '$false'}
+$focusIntervalMs = ${settings.focusInterval}
+$titleFilter = '${titleFilter}'
+$lastFocusAt = [DateTime]::UtcNow.AddMilliseconds(-$focusIntervalMs)
 
 while ($true) {
+    if ($keepFocusOnTitle -and $titleFilter.Length -gt 0) {
+        $now = [DateTime]::UtcNow
+        if (($now - $lastFocusAt).TotalMilliseconds -ge $focusIntervalMs) {
+            $lastFocusAt = $now
+            $targetWindow = [MouseNative]::FindWindowByTitleContains($titleFilter)
+            if ($targetWindow -ne [IntPtr]::Zero) {
+                $currentForeground = [MouseNative]::GetForegroundWindow()
+                if ($currentForeground -ne $targetWindow) {
+                    [MouseNative]::ShowWindow($targetWindow, [MouseNative]::SW_MAXIMIZE) | Out-Null
+                    [MouseNative]::SetForegroundWindow($targetWindow) | Out-Null
+                    [MouseNative]::MoveCursorToWindowCorners($targetWindow)
+                }
+            }
+        }
+    }
+
     $dx = Get-Random -Minimum (-$deviation) -Maximum ($deviation + 1)
     $dy = Get-Random -Minimum (-$deviation) -Maximum ($deviation + 1)
 

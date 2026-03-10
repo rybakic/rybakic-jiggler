@@ -12,3 +12,39 @@
     gap: 1rem;
     margin-left: .5rem;
 }
+
+.focus-toggle{
+    display: flex;
+    align-items: center;
+    gap: .75rem;
+    font-size: .95rem;
+}
+
+.hint{
+    margin: 0;
+    font-size: .85rem;
+    color: #6b7280;
+}
+
+.text-field{
+    display: grid;
+    gap: .5rem;
+    font-size: .95rem;
+}
+
+.text-field__label{
+    font-weight: 600;
+}
+
+.text-field__input{
+    padding: .6rem .75rem;
+    border-radius: .75rem;
+    border: 1px solid #cbd5f5;
+    background: #ffffff;
+    font-size: 1rem;
+}
+
+.text-field__input:focus{
+    outline: 2px solid #2563eb;
+    outline-offset: 2px;
+}

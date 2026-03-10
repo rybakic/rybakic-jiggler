@@ -2,6 +2,9 @@ interface JigglerSettings {
   deviation: number;
   frequency: number;
   smoothness: number;
+  keepFocusOnTitle: boolean;
+  focusInterval: number;
+  foregroundWindowTitle: string;
 }
 
 interface JigglerState {
