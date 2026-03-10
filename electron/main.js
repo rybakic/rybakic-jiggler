@@ -18,6 +18,7 @@ const DEFAULT_SETTINGS = {
   keepFocusOnTitle: false,
   focusInterval: 3000,
   foregroundWindowTitle: '',
+  enableMicroJiggle: true,
 };
 
 const TRAY_ICON_FILES = {
@@ -42,11 +43,20 @@ function sanitizeSettings(raw) {
     keepFocusOnTitle: Boolean(input.keepFocusOnTitle),
     focusInterval: clamp(Math.round(Number(input.focusInterval) || DEFAULT_SETTINGS.focusInterval), 1000, 10000),
     foregroundWindowTitle: String(input.foregroundWindowTitle ?? '').slice(0, 200),
+    enableMicroJiggle:
+      input.enableMicroJiggle === undefined
+        ? DEFAULT_SETTINGS.enableMicroJiggle
+        : Boolean(input.enableMicroJiggle),
   };
 }
 
 function resolvePublicAsset(name) {
   if (app.isPackaged) {
+    const resourcePath = path.join(process.resourcesPath, 'public', name);
+    if (fs.existsSync(resourcePath)) {
+      return resourcePath;
+    }
+
     return path.join(app.getAppPath(), 'public', name);
   }
 
@@ -163,6 +173,7 @@ public static class MouseNative {
     public const uint MOUSEEVENTF_MOVE = 0x0001;
     public const int SW_SHOW = 5;
     public const int SW_MAXIMIZE = 3;
+    private static readonly Random Rng = new Random();
 
     [StructLayout(LayoutKind.Sequential)]
     public struct POINT {
@@ -262,6 +273,17 @@ public static class MouseNative {
         return result;
     }
 
+    private static void MoveDirectTo(int toX, int toY) {
+        POINT current;
+        GetCursorPos(out current);
+
+        int dx = toX - current.X;
+        int dy = toY - current.Y;
+        if (dx != 0 || dy != 0) {
+            mouse_event(MOUSEEVENTF_MOVE, dx, dy, 0, UIntPtr.Zero);
+        }
+    }
+
     public static void MoveCursorToWindowCorners(IntPtr hWnd) {
         if (hWnd == IntPtr.Zero) {
             return;
@@ -274,22 +296,48 @@ public static class MouseNative {
 
         int width = rect.Right - rect.Left;
         int height = rect.Bottom - rect.Top;
-        int insetX = Math.Max(24, width / 5);
-        int insetY = Math.Max(24, height / 5);
+
+        double insetRatioX = 0.2 + (Rng.NextDouble() * 0.15);
+        double insetRatioY = 0.2 + (Rng.NextDouble() * 0.15);
+        int insetX = Math.Max(24, (int)(width * insetRatioX));
+        int insetY = Math.Max(24, (int)(height * insetRatioY));
 
         int left = rect.Left + insetX;
         int top = rect.Top + insetY;
         int right = rect.Right - insetX;
         int bottom = rect.Bottom - insetY;
 
+        var points = new POINT[]
+        {
+            new POINT { X = left, Y = top },
+            new POINT { X = right, Y = top },
+            new POINT { X = right, Y = bottom },
+            new POINT { X = left, Y = bottom },
+        };
+
+        for (int i = points.Length - 1; i > 0; i--) {
+            int j = Rng.Next(i + 1);
+            var temp = points[i];
+            points[i] = points[j];
+            points[j] = temp;
+        }
+
         POINT original;
         GetCursorPos(out original);
 
-        SetCursorPos(left, top);
-        SetCursorPos(right, top);
-        SetCursorPos(right, bottom);
-        SetCursorPos(left, bottom);
-        SetCursorPos(original.X, original.Y);
+        try {
+            foreach (var point in points) {
+                MoveDirectTo(point.X, point.Y);
+                mouse_event(MOUSEEVENTF_MOVE, 1, 0, 0, UIntPtr.Zero);
+                mouse_event(MOUSEEVENTF_MOVE, -1, 0, 0, UIntPtr.Zero);
+            }
+        } finally {
+            MoveDirectTo(original.X, original.Y);
+            MoveDirectTo(original.X, original.Y);
+            mouse_event(MOUSEEVENTF_MOVE, 1, 0, 0, UIntPtr.Zero);
+            mouse_event(MOUSEEVENTF_MOVE, -1, 0, 0, UIntPtr.Zero);
+            MoveDirectTo(original.X, original.Y);
+        }
     }
 }
 "@
@@ -300,9 +348,11 @@ $smoothness = ${settings.smoothness}
 $keepFocusOnTitle = ${settings.keepFocusOnTitle ? '$true' : '$false'}
 $focusIntervalMs = ${settings.focusInterval}
 $titleFilter = '${titleFilter}'
+$enableMicroJiggle = ${settings.enableMicroJiggle ? '$true' : '$false'}
 $lastFocusAt = [DateTime]::UtcNow.AddMilliseconds(-$focusIntervalMs)
 
 while ($true) {
+    $targetWindow = $null
     if ($keepFocusOnTitle -and $titleFilter.Length -gt 0) {
         $now = [DateTime]::UtcNow
         if (($now - $lastFocusAt).TotalMilliseconds -ge $focusIntervalMs) {
@@ -313,60 +363,72 @@ while ($true) {
                 if ($currentForeground -ne $targetWindow) {
                     [MouseNative]::ShowWindow($targetWindow, [MouseNative]::SW_MAXIMIZE) | Out-Null
                     [MouseNative]::SetForegroundWindow($targetWindow) | Out-Null
-                    [MouseNative]::MoveCursorToWindowCorners($targetWindow)
                 }
             }
         }
     }
 
-    $dx = Get-Random -Minimum (-$deviation) -Maximum ($deviation + 1)
-    $dy = Get-Random -Minimum (-$deviation) -Maximum ($deviation + 1)
+    if ($enableMicroJiggle) {
+        $dx = Get-Random -Minimum (-$deviation) -Maximum ($deviation + 1)
+        $dy = Get-Random -Minimum (-$deviation) -Maximum ($deviation + 1)
 
-    if ($dx -eq 0 -and $dy -eq 0) {
-        $dx = 1
+        if ($dx -eq 0 -and $dy -eq 0) {
+            $dx = 1
+        }
+
+        $cycleMs = [Math]::Max([int]$frequencyMs, 100)
+        $stepCount = [Math]::Max($smoothness, 1)
+
+        # Короткое "касание" мыши: быстро ушли/вернулись и дали курсору свободно жить до следующего цикла.
+        $motionBudgetMs = [Math]::Min([int]($cycleMs * 0.35), 220)
+        $stepDelayMs = [Math]::Max([int]($motionBudgetMs / (2 * $stepCount)), 1)
+        $motionSpentMs = $stepDelayMs * 2 * $stepCount
+
+        $movedX = 0
+        $movedY = 0
+        for ($i = 1; $i -le $stepCount; $i++) {
+            $nextX = [int][Math]::Round(($dx * $i) / $stepCount)
+            $nextY = [int][Math]::Round(($dy * $i) / $stepCount)
+            $incX = $nextX - $movedX
+            $incY = $nextY - $movedY
+
+            [MouseNative]::mouse_event([MouseNative]::MOUSEEVENTF_MOVE, $incX, $incY, 0, [UIntPtr]::Zero)
+
+            $movedX = $nextX
+            $movedY = $nextY
+            Start-Sleep -Milliseconds $stepDelayMs
+        }
+
+        $returnedX = 0
+        $returnedY = 0
+        for ($i = 1; $i -le $stepCount; $i++) {
+            $nextX = [int][Math]::Round(((-$dx) * $i) / $stepCount)
+            $nextY = [int][Math]::Round(((-$dy) * $i) / $stepCount)
+            $incX = $nextX - $returnedX
+            $incY = $nextY - $returnedY
+
+            [MouseNative]::mouse_event([MouseNative]::MOUSEEVENTF_MOVE, $incX, $incY, 0, [UIntPtr]::Zero)
+
+            $returnedX = $nextX
+            $returnedY = $nextY
+            Start-Sleep -Milliseconds $stepDelayMs
+        }
+
+        $restMs = $cycleMs - $motionSpentMs
+        if ($restMs -gt 0) {
+            Start-Sleep -Milliseconds $restMs
+        }
+    } else {
+        Start-Sleep -Milliseconds $frequencyMs
     }
 
-    $cycleMs = [Math]::Max([int]$frequencyMs, 100)
-    $stepCount = [Math]::Max($smoothness, 1)
-
-    # Короткое "касание" мыши: быстро ушли/вернулись и дали курсору свободно жить до следующего цикла.
-    $motionBudgetMs = [Math]::Min([int]($cycleMs * 0.35), 220)
-    $stepDelayMs = [Math]::Max([int]($motionBudgetMs / (2 * $stepCount)), 1)
-    $motionSpentMs = $stepDelayMs * 2 * $stepCount
-
-    $movedX = 0
-    $movedY = 0
-    for ($i = 1; $i -le $stepCount; $i++) {
-        $nextX = [int][Math]::Round(($dx * $i) / $stepCount)
-        $nextY = [int][Math]::Round(($dy * $i) / $stepCount)
-        $incX = $nextX - $movedX
-        $incY = $nextY - $movedY
-
-        [MouseNative]::mouse_event([MouseNative]::MOUSEEVENTF_MOVE, $incX, $incY, 0, [UIntPtr]::Zero)
-
-        $movedX = $nextX
-        $movedY = $nextY
-        Start-Sleep -Milliseconds $stepDelayMs
-    }
-
-    $returnedX = 0
-    $returnedY = 0
-    for ($i = 1; $i -le $stepCount; $i++) {
-        $nextX = [int][Math]::Round(((-$dx) * $i) / $stepCount)
-        $nextY = [int][Math]::Round(((-$dy) * $i) / $stepCount)
-        $incX = $nextX - $returnedX
-        $incY = $nextY - $returnedY
-
-        [MouseNative]::mouse_event([MouseNative]::MOUSEEVENTF_MOVE, $incX, $incY, 0, [UIntPtr]::Zero)
-
-        $returnedX = $nextX
-        $returnedY = $nextY
-        Start-Sleep -Milliseconds $stepDelayMs
-    }
-
-    $restMs = $cycleMs - $motionSpentMs
-    if ($restMs -gt 0) {
-        Start-Sleep -Milliseconds $restMs
+    if ($titleFilter.Length -gt 0) {
+        if (-not $targetWindow -or $targetWindow -eq [IntPtr]::Zero) {
+            $targetWindow = [MouseNative]::FindWindowByTitleContains($titleFilter)
+        }
+        if ($targetWindow -ne [IntPtr]::Zero) {
+            [MouseNative]::MoveCursorToWindowCorners($targetWindow)
+        }
     }
 }
 `;

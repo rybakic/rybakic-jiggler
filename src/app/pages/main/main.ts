@@ -35,6 +35,7 @@ export class Main {
     keepFocusOnTitle: new FormControl(false, { nonNullable: true }),
     focusInterval: new FormControl(3000, { nonNullable: true }),
     foregroundWindowTitle: new FormControl('', { nonNullable: true }),
+    enableMicroJiggle: new FormControl(true, { nonNullable: true }),
   });
 
   constructor() {
@@ -66,6 +67,7 @@ export class Main {
           keepFocusOnTitle: rawSettings.keepFocusOnTitle ?? false,
           focusInterval: rawSettings.focusInterval ?? 3000,
           foregroundWindowTitle: rawSettings.foregroundWindowTitle ?? '',
+          enableMicroJiggle: rawSettings.enableMicroJiggle ?? false,
         };
 
         api.updateSettings(settings);

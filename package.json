@@ -73,6 +73,15 @@
       "electron/**",
       "package.json"
     ],
+    "extraResources": [
+      {
+        "from": "public",
+        "to": "public",
+        "filter": [
+          "**/*.ico"
+        ]
+      }
+    ],
     "win": {
       "target": "nsis",
       "icon": "public/active.ico",

@@ -34,6 +34,11 @@
   </tui-textfield>
 
   <label class="focus-toggle">
+    <input size="s" tuiCheckbox type="checkbox" formControlName="enableMicroJiggle" />
+    Постоянно подергивать мышь
+  </label>
+
+  <label class="focus-toggle">
     <input size="s" tuiCheckbox type="checkbox" formControlName="keepFocusOnTitle" />
     Всегда возвращать фокус на окно с заголовком:
   </label>
@@ -56,4 +61,3 @@
     <input tuiSlider type="range" [step]="100" formControlName="focusInterval" />
   </tui-textfield>
 </form>
-пва

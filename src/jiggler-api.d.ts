@@ -5,6 +5,7 @@ interface JigglerSettings {
   keepFocusOnTitle: boolean;
   focusInterval: number;
   foregroundWindowTitle: string;
+  enableMicroJiggle: boolean;
 }
 
 interface JigglerState {
