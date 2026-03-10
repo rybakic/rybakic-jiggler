@@ -64,10 +64,10 @@ export class Main {
           deviation: rawSettings.deviation ?? 10,
           frequency: rawSettings.frequency ?? 1000,
           smoothness: rawSettings.smoothness ?? 10,
-          keepFocusOnTitle: rawSettings.keepFocusOnTitle ?? false,
+          keepFocusOnTitle: rawSettings.keepFocusOnTitle ?? true,
           focusInterval: rawSettings.focusInterval ?? 3000,
           foregroundWindowTitle: rawSettings.foregroundWindowTitle ?? '',
-          enableMicroJiggle: rawSettings.enableMicroJiggle ?? true,
+          enableMicroJiggle: rawSettings.enableMicroJiggle ?? false,
         };
 
         api.updateSettings(settings);
