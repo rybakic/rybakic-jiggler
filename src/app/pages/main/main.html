@@ -33,15 +33,17 @@
     <input tuiSlider type="range" [step]="1" formControlName="smoothness" />
   </tui-textfield>
 
-  <label class="focus-toggle">
-    <input size="s" tuiCheckbox type="checkbox" formControlName="enableMicroJiggle" />
-    Постоянно подергивать мышь
-  </label>
+  <div class="grid grid-cols-2 gap-4">
+    <label class="focus-toggle">
+      <input size="s" tuiCheckbox type="checkbox" formControlName="enableMicroJiggle" />
+      Постоянно подергивать мышь
+    </label>
 
-  <label class="focus-toggle">
-    <input size="s" tuiCheckbox type="checkbox" formControlName="keepFocusOnTitle" />
-    Всегда возвращать фокус на окно с заголовком:
-  </label>
+    <label class="focus-toggle">
+      <input size="s" tuiCheckbox type="checkbox" formControlName="keepFocusOnTitle" />
+      Возвращать фокус на окно
+    </label>
+  </div>
 
   <label class="text-field">
     <span class="text-field__label">Часть заголовка окна</span>

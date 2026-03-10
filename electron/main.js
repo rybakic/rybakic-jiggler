@@ -544,6 +544,12 @@ function createWindow() {
 
   win = new BrowserWindow(windowOptions);
   win.removeMenu();
+  if (IS_WINDOWS) {
+    const windowIcon = nativeImage.createFromPath(getWindowIconPath());
+    if (!windowIcon.isEmpty()) {
+      win.setIcon(windowIcon);
+    }
+  }
 
   if (!app.isPackaged) {
     win.loadURL('http://localhost:4200');
