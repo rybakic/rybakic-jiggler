@@ -10,12 +10,12 @@ import {
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormControl, FormGroup, ReactiveFormsModule } from '@angular/forms';
 import { TuiTextfield } from '@taiga-ui/core';
-import { TuiCheckbox, TuiInputSlider, TuiPulse } from '@taiga-ui/kit';
+import { TuiInputSlider, TuiPulse, TuiSwitch } from '@taiga-ui/kit';
 import { debounceTime, startWith } from 'rxjs';
 
 @Component({
   selector: 'app-main',
-  imports: [ReactiveFormsModule, TuiInputSlider, TuiTextfield, TuiPulse, TuiCheckbox, TuiTextfield],
+  imports: [ReactiveFormsModule, TuiInputSlider, TuiTextfield, TuiPulse, TuiSwitch],
   templateUrl: './main.html',
   styleUrl: './main.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -25,6 +25,8 @@ export class Main {
   private readonly destroyRef = inject(DestroyRef);
 
   protected readonly isEnabled = signal(false);
+  protected readonly showMicroFields = signal(false);
+  protected readonly showFocusFields = signal(false);
 
   readonly statusClass = computed(() => (this.isEnabled() ? 'text-green-500!' : 'text-red-500!'));
 
@@ -34,6 +36,7 @@ export class Main {
     smoothness: new FormControl(10, { nonNullable: true }),
     keepFocusOnTitle: new FormControl(true, { nonNullable: true }),
     focusInterval: new FormControl(3000, { nonNullable: true }),
+    cornerInterval: new FormControl(3000, { nonNullable: true }),
     foregroundWindowTitle: new FormControl('', { nonNullable: true }),
     enableMicroJiggle: new FormControl(false, { nonNullable: true }),
     enableCornerSmoothing: new FormControl(false, { nonNullable: true }),
@@ -61,12 +64,16 @@ export class Main {
     this.form.valueChanges
       .pipe(startWith(this.form.getRawValue()), debounceTime(100), takeUntilDestroyed())
       .subscribe((rawSettings) => {
+        this.showMicroFields.set(rawSettings.enableMicroJiggle ?? false);
+        this.showFocusFields.set(rawSettings.keepFocusOnTitle ?? false);
+
         const settings = {
           deviation: rawSettings.deviation ?? 10,
           frequency: rawSettings.frequency ?? 1000,
           smoothness: rawSettings.smoothness ?? 10,
           keepFocusOnTitle: rawSettings.keepFocusOnTitle ?? true,
           focusInterval: rawSettings.focusInterval ?? 3000,
+          cornerInterval: rawSettings.cornerInterval ?? 3000,
           foregroundWindowTitle: rawSettings.foregroundWindowTitle ?? '',
           enableMicroJiggle: rawSettings.enableMicroJiggle ?? false,
           enableCornerSmoothing: rawSettings.enableCornerSmoothing ?? false,
@@ -78,6 +85,8 @@ export class Main {
 
   private applyState(state: JigglerState): void {
     this.isEnabled.set(state.enabled);
+    this.showMicroFields.set(state.settings.enableMicroJiggle);
+    this.showFocusFields.set(state.settings.keepFocusOnTitle);
 
     this.form.patchValue(state.settings, { emitEvent: false });
     this.cdr.markForCheck();

@@ -3,13 +3,9 @@ const { spawn } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 
-let win;
-let tray;
-let jigglerProcess = null;
-let isJigglerEnabled = false;
-let isQuitting = false;
-const hasSingleInstanceLock = app.requestSingleInstanceLock();
+const APP_ID = 'com.rybakic.mousejiggler';
 const IS_WINDOWS = process.platform === 'win32';
+const hasSingleInstanceLock = app.requestSingleInstanceLock();
 
 const DEFAULT_SETTINGS = {
   deviation: 10,
@@ -17,6 +13,7 @@ const DEFAULT_SETTINGS = {
   smoothness: 10,
   keepFocusOnTitle: false,
   focusInterval: 3000,
+  cornerInterval: 3000,
   foregroundWindowTitle: '',
   enableMicroJiggle: true,
   enableCornerSmoothing: false,
@@ -28,7 +25,14 @@ const TRAY_ICON_FILES = {
   fallback: 'icon.ico',
 };
 
-let jigglerSettings = { ...DEFAULT_SETTINGS };
+const state = {
+  win: null,
+  tray: null,
+  jigglerProcess: null,
+  isJigglerEnabled: false,
+  isQuitting: false,
+  settings: { ...DEFAULT_SETTINGS },
+};
 
 function clamp(value, min, max) {
   return Math.min(Math.max(value, min), max);
@@ -43,6 +47,7 @@ function sanitizeSettings(raw) {
     smoothness: clamp(Math.round(Number(input.smoothness) || DEFAULT_SETTINGS.smoothness), 1, 20),
     keepFocusOnTitle: Boolean(input.keepFocusOnTitle),
     focusInterval: clamp(Math.round(Number(input.focusInterval) || DEFAULT_SETTINGS.focusInterval), 1000, 10000),
+    cornerInterval: clamp(Math.round(Number(input.cornerInterval) || DEFAULT_SETTINGS.cornerInterval), 500, 10000),
     foregroundWindowTitle: String(input.foregroundWindowTitle ?? '').slice(0, 200),
     enableMicroJiggle:
       input.enableMicroJiggle === undefined
@@ -103,28 +108,32 @@ function getWindowIconPath() {
 
 function getState() {
   return {
-    enabled: isJigglerEnabled,
-    settings: jigglerSettings,
+    enabled: state.isJigglerEnabled,
+    settings: state.settings,
   };
 }
 
+function hasWindow() {
+  return state.win && !state.win.isDestroyed();
+}
+
 function showMainWindow() {
-  if (!win || win.isDestroyed()) {
+  if (!hasWindow()) {
     return;
   }
 
-  if (win.isMinimized()) {
-    win.restore();
+  if (state.win.isMinimized()) {
+    state.win.restore();
   }
 
-  win.show();
-  win.focus();
+  state.win.show();
+  state.win.focus();
 }
 
 function buildTrayMenu() {
   return Menu.buildFromTemplate([
     {
-      label: isJigglerEnabled ? 'Выключить (F8)' : 'Включить (F8)',
+      label: state.isJigglerEnabled ? 'Выключить (F8)' : 'Включить (F8)',
       click: () => toggleJiggler(),
     },
     {
@@ -135,7 +144,7 @@ function buildTrayMenu() {
     {
       label: 'Выход',
       click: () => {
-        isQuitting = true;
+        state.isQuitting = true;
         app.quit();
       },
     },
@@ -143,20 +152,20 @@ function buildTrayMenu() {
 }
 
 function updateTray() {
-  if (!tray) {
+  if (!state.tray) {
     return;
   }
 
-  tray.setImage(getTrayIcon(isJigglerEnabled));
-  tray.setToolTip(
-    `RYBAKIČ Mouse Jiggler: ${isJigglerEnabled ? 'включен (F8)' : 'выключен (F8)'}`,
+  state.tray.setImage(getTrayIcon(state.isJigglerEnabled));
+  state.tray.setToolTip(
+    `RYBAKIČ Mouse Jiggler: ${state.isJigglerEnabled ? 'включен (F8)' : 'выключен (F8)'}`,
   );
-  tray.setContextMenu(buildTrayMenu());
+  state.tray.setContextMenu(buildTrayMenu());
 }
 
 function broadcastState() {
-  if (win && !win.isDestroyed()) {
-    win.webContents.send('jiggler:state', getState());
+  if (hasWindow()) {
+    state.win.webContents.send('jiggler:state', getState());
   }
 
   updateTray();
@@ -380,10 +389,12 @@ $frequencyMs = ${settings.frequency}
 $smoothness = ${settings.smoothness}
 $keepFocusOnTitle = ${settings.keepFocusOnTitle ? '$true' : '$false'}
 $focusIntervalMs = ${settings.focusInterval}
+$cornerIntervalMs = ${settings.cornerInterval}
 $titleFilter = '${titleFilter}'
 $enableMicroJiggle = ${settings.enableMicroJiggle ? '$true' : '$false'}
 $enableCornerSmoothing = ${settings.enableCornerSmoothing ? '$true' : '$false'}
 $lastFocusAt = [DateTime]::UtcNow.AddMilliseconds(-$focusIntervalMs)
+$lastCornerAt = [DateTime]::UtcNow.AddMilliseconds(-$cornerIntervalMs)
 
 while ($true) {
     $targetWindow = $null
@@ -457,11 +468,15 @@ while ($true) {
     }
 
     if ($titleFilter.Length -gt 0) {
-        if (-not $targetWindow -or $targetWindow -eq [IntPtr]::Zero) {
-            $targetWindow = [MouseNative]::FindWindowByTitleContains($titleFilter)
-        }
-        if ($targetWindow -ne [IntPtr]::Zero) {
-            [MouseNative]::MoveCursorToWindowCorners($targetWindow, $enableCornerSmoothing)
+        $now = [DateTime]::UtcNow
+        if (($now - $lastCornerAt).TotalMilliseconds -ge $cornerIntervalMs) {
+            $lastCornerAt = $now
+            if (-not $targetWindow -or $targetWindow -eq [IntPtr]::Zero) {
+                $targetWindow = [MouseNative]::FindWindowByTitleContains($titleFilter)
+            }
+            if ($targetWindow -ne [IntPtr]::Zero) {
+                [MouseNative]::MoveCursorToWindowCorners($targetWindow, $enableCornerSmoothing)
+            }
         }
     }
 }
@@ -489,50 +504,50 @@ function spawnJigglerProcess(settings) {
 }
 
 function stopJiggler() {
-  const processToStop = jigglerProcess;
-  jigglerProcess = null;
+  const processToStop = state.jigglerProcess;
+  state.jigglerProcess = null;
 
   if (processToStop) {
     processToStop.removeAllListeners('exit');
     processToStop.kill();
   }
 
-  isJigglerEnabled = false;
+  state.isJigglerEnabled = false;
   broadcastState();
 }
 
 function startJiggler() {
-  if (jigglerProcess) {
+  if (state.jigglerProcess) {
     stopJiggler();
   }
 
-  const nextProcess = spawnJigglerProcess(jigglerSettings);
+  const nextProcess = spawnJigglerProcess(state.settings);
   if (!nextProcess) {
-    isJigglerEnabled = false;
+    state.isJigglerEnabled = false;
     broadcastState();
     return;
   }
 
-  jigglerProcess = nextProcess;
+  state.jigglerProcess = nextProcess;
 
   nextProcess.once('exit', () => {
-    if (jigglerProcess !== nextProcess) {
+    if (state.jigglerProcess !== nextProcess) {
       return;
     }
 
-    jigglerProcess = null;
-    if (isJigglerEnabled) {
-      isJigglerEnabled = false;
+    state.jigglerProcess = null;
+    if (state.isJigglerEnabled) {
+      state.isJigglerEnabled = false;
       broadcastState();
     }
   });
 
-  isJigglerEnabled = true;
+  state.isJigglerEnabled = true;
   broadcastState();
 }
 
 function toggleJiggler() {
-  if (isJigglerEnabled) {
+  if (state.isJigglerEnabled) {
     stopJiggler();
     return;
   }
@@ -544,9 +559,9 @@ function registerIpcHandlers() {
   ipcMain.handle('jiggler:get-state', () => getState());
 
   ipcMain.handle('jiggler:update-settings', (_event, rawSettings) => {
-    jigglerSettings = sanitizeSettings(rawSettings);
+    state.settings = sanitizeSettings(rawSettings);
 
-    if (isJigglerEnabled) {
+    if (state.isJigglerEnabled) {
       stopJiggler();
       return getState();
     }
@@ -558,8 +573,8 @@ function registerIpcHandlers() {
 
 function createWindow() {
   const windowOptions = {
-    width: 560,
-    height: 460,
+    width: 550,
+    height: 550,
     resizable: false,
     minimizable: false,
     maximizable: false,
@@ -576,49 +591,49 @@ function createWindow() {
     windowOptions.icon = getWindowIconPath();
   }
 
-  win = new BrowserWindow(windowOptions);
-  win.removeMenu();
+  state.win = new BrowserWindow(windowOptions);
+  state.win.removeMenu();
   if (IS_WINDOWS) {
     const windowIcon = nativeImage.createFromPath(getWindowIconPath());
     if (!windowIcon.isEmpty()) {
-      win.setIcon(windowIcon);
+      state.win.setIcon(windowIcon);
     }
   }
 
   if (!app.isPackaged) {
-    win.loadURL('http://localhost:4200');
-    // win.webContents.openDevTools({ mode: 'detach' });
+    state.win.loadURL('http://localhost:4200');
+    // state.win.webContents.openDevTools({ mode: 'detach' });
   } else {
     const indexPath = path.join(app.getAppPath(), 'dist', 'rybakic-jiggler', 'browser', 'index.html');
-    win.loadFile(indexPath);
+    state.win.loadFile(indexPath);
   }
 
-  win.on('close', (event) => {
-    if (isQuitting) {
+  state.win.on('close', (event) => {
+    if (state.isQuitting) {
       return;
     }
 
     event.preventDefault();
-    win.hide();
+    state.win.hide();
   });
 
-  win.webContents.on('did-finish-load', () => {
+  state.win.webContents.on('did-finish-load', () => {
     broadcastState();
   });
 }
 
 function createTray() {
-  tray = new Tray(getTrayIcon(false));
-  tray.setContextMenu(buildTrayMenu());
-  tray.on('double-click', () => showMainWindow());
-  tray.on('click', () => showMainWindow());
+  state.tray = new Tray(getTrayIcon(false));
+  state.tray.setContextMenu(buildTrayMenu());
+  state.tray.on('double-click', () => showMainWindow());
+  state.tray.on('click', () => showMainWindow());
   updateTray();
 }
 
 if (!IS_WINDOWS) {
   app.whenReady().then(() => app.quit());
 } else {
-  app.setAppUserModelId('com.rybakic.mousejiggler');
+  app.setAppUserModelId(APP_ID);
 
   if (!hasSingleInstanceLock) {
     app.quit();
@@ -644,7 +659,7 @@ if (!IS_WINDOWS) {
   });
 
   app.on('before-quit', () => {
-    isQuitting = true;
+    state.isQuitting = true;
     globalShortcut.unregisterAll();
     stopJiggler();
   });

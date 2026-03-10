@@ -7,59 +7,87 @@
     (переключение: F8)
   </p>
 
-  <div class="row grid grid-cols-2 gap-4">
+  <label class="focus-toggle">
+    <input tuiSwitch type="checkbox" formControlName="enableMicroJiggle" />
+    Подергивать мышь
+  </label>
+
+  @if (showMicroFields()) {
+    <div class="row grid grid-cols-2 gap-4">
+      <tui-textfield>
+        <label tuiLabel>Отклонение</label>
+
+        <input prefix="px " tuiInputSlider [max]="100" [min]="1" formControlName="deviation" />
+
+        <input tuiSlider type="range" [step]="1" formControlName="deviation" />
+      </tui-textfield>
+
+      <tui-textfield>
+        <label tuiLabel>Частота</label>
+
+        <input prefix="ms " tuiInputSlider [max]="10000" [min]="100" formControlName="frequency" />
+
+        <input tuiSlider type="range" [step]="100" formControlName="frequency" />
+      </tui-textfield>
+    </div>
+
     <tui-textfield>
-      <label tuiLabel>Отклонение</label>
+      <label tuiLabel>Плавность</label>
 
-      <input prefix="px " tuiInputSlider [max]="100" [min]="1" formControlName="deviation" />
+      <input prefix="sl " tuiInputSlider [max]="20" [min]="1" formControlName="smoothness" />
 
-      <input tuiSlider type="range" [step]="1" formControlName="deviation" />
+      <input tuiSlider type="range" [step]="1" formControlName="smoothness" />
     </tui-textfield>
+  }
+
+  <label class="focus-toggle">
+    <input tuiSwitch type="checkbox" formControlName="keepFocusOnTitle" />
+    Возвращать фокус на окно
+  </label>
+
+  @if (showFocusFields()) {
+    <div class="row grid grid-cols-2 gap-4">
+      <tui-textfield>
+        <label tuiLabel>Интервал возврата фокуса</label>
+
+        <input
+          prefix="ms "
+          tuiInputSlider
+          [max]="10000"
+          [min]="1000"
+          formControlName="focusInterval"
+        />
+
+        <input tuiSlider type="range" [step]="100" formControlName="focusInterval" />
+      </tui-textfield>
+
+      <tui-textfield>
+        <label tuiLabel>Интервал прыжков по углам</label>
+
+        <input
+          prefix="ms "
+          tuiInputSlider
+          [max]="10000"
+          [min]="500"
+          formControlName="cornerInterval"
+        />
+
+        <input tuiSlider type="range" [step]="100" formControlName="cornerInterval" />
+      </tui-textfield>
+    </div>
 
     <tui-textfield>
-      <label tuiLabel>Частота</label>
-
-      <input prefix="ms " tuiInputSlider [max]="10000" [min]="100" formControlName="frequency" />
-
-      <input tuiSlider type="range" [step]="100" formControlName="frequency" />
+      <label tuiLabel>Часть заголовка окна</label>
+      <input
+        type="text"
+        placeholder="например: TESTERS_Outstaff"
+        formControlName="foregroundWindowTitle"
+        tuiTextfield
+      />
     </tui-textfield>
-  </div>
-
-  <tui-textfield>
-    <label tuiLabel>Плавность</label>
-
-    <input prefix="sl " tuiInputSlider [max]="20" [min]="1" formControlName="smoothness" />
-
-    <input tuiSlider type="range" [step]="1" formControlName="smoothness" />
-  </tui-textfield>
-
-  <div class="grid grid-cols-2 gap-4 px-2">
-    <label class="focus-toggle">
-      <input size="s" tuiCheckbox type="checkbox" formControlName="enableMicroJiggle" />
-      Подергивать мышь
-    </label>
-
-    <label class="focus-toggle">
-      <input size="s" tuiCheckbox type="checkbox" formControlName="enableCornerSmoothing" />
+  }
+  <label class="focus-toggle">
+      <input tuiSwitch type="checkbox" formControlName="enableCornerSmoothing" />
       Плавные прыжки по углам
     </label>
-
-    <label class="focus-toggle">
-      <input size="s" tuiCheckbox type="checkbox" formControlName="keepFocusOnTitle" />
-      Возвращать фокус на окно
-    </label>
-  </div>
-
-  <tui-textfield>
-    <label tuiLabel>Часть заголовка окна</label>
-    <input type="text" placeholder="например: VMware Horizon Client" formControlName="foregroundWindowTitle" tuiTextfield />
-  </tui-textfield>
-
-  <tui-textfield>
-    <label tuiLabel>Интервал возврата фокуса</label>
-
-    <input prefix="ms " tuiInputSlider [max]="10000" [min]="1000" formControlName="focusInterval" />
-
-    <input tuiSlider type="range" [step]="100" formControlName="focusInterval" />
-  </tui-textfield>
 </form>
