@@ -8,14 +8,14 @@ const IS_WINDOWS = process.platform === 'win32';
 const hasSingleInstanceLock = app.requestSingleInstanceLock();
 
 const DEFAULT_SETTINGS = {
+  enableMicroJiggle: false,
   deviation: 10,
   frequency: 1000,
   smoothness: 10,
-  keepFocusOnTitle: false,
+  keepFocusOnTitle: true,
   focusInterval: 3000,
   cornerInterval: 3000,
   foregroundWindowTitle: '',
-  enableMicroJiggle: true,
   enableCornerSmoothing: false,
 };
 
@@ -38,26 +38,54 @@ function clamp(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
 
+function toBoolean(value, fallback) {
+  if (value === undefined) {
+    return fallback;
+  }
+
+  return Boolean(value);
+}
+
+function toNumber(value, fallback) {
+  const numeric = Number(value);
+  if (Number.isNaN(numeric) || !Number.isFinite(numeric)) {
+    return fallback;
+  }
+
+  return numeric;
+}
+
 function sanitizeSettings(raw) {
   const input = raw ?? {};
 
   return {
-    deviation: clamp(Math.round(Number(input.deviation) || DEFAULT_SETTINGS.deviation), 1, 100),
-    frequency: clamp(Math.round(Number(input.frequency) || DEFAULT_SETTINGS.frequency), 100, 10000),
-    smoothness: clamp(Math.round(Number(input.smoothness) || DEFAULT_SETTINGS.smoothness), 1, 20),
-    keepFocusOnTitle: Boolean(input.keepFocusOnTitle),
-    focusInterval: clamp(Math.round(Number(input.focusInterval) || DEFAULT_SETTINGS.focusInterval), 1000, 10000),
-    cornerInterval: clamp(Math.round(Number(input.cornerInterval) || DEFAULT_SETTINGS.cornerInterval), 500, 10000),
+    deviation: clamp(Math.round(toNumber(input.deviation, DEFAULT_SETTINGS.deviation)), 1, 100),
+    frequency: clamp(Math.round(toNumber(input.frequency, DEFAULT_SETTINGS.frequency)), 100, 10000),
+    smoothness: clamp(Math.round(toNumber(input.smoothness, DEFAULT_SETTINGS.smoothness)), 1, 20),
+    keepFocusOnTitle: toBoolean(input.keepFocusOnTitle, DEFAULT_SETTINGS.keepFocusOnTitle),
+    focusInterval: clamp(Math.round(toNumber(input.focusInterval, DEFAULT_SETTINGS.focusInterval)), 1000, 10000),
+    cornerInterval: clamp(Math.round(toNumber(input.cornerInterval, DEFAULT_SETTINGS.cornerInterval)), 500, 10000),
     foregroundWindowTitle: String(input.foregroundWindowTitle ?? '').slice(0, 200),
-    enableMicroJiggle:
-      input.enableMicroJiggle === undefined
-        ? DEFAULT_SETTINGS.enableMicroJiggle
-        : Boolean(input.enableMicroJiggle),
-    enableCornerSmoothing:
-      input.enableCornerSmoothing === undefined
-        ? DEFAULT_SETTINGS.enableCornerSmoothing
-        : Boolean(input.enableCornerSmoothing),
+    enableMicroJiggle: toBoolean(input.enableMicroJiggle, DEFAULT_SETTINGS.enableMicroJiggle),
+    enableCornerSmoothing: toBoolean(
+      input.enableCornerSmoothing,
+      DEFAULT_SETTINGS.enableCornerSmoothing,
+    ),
   };
+}
+
+function areSettingsEqual(left, right) {
+  return (
+    left.deviation === right.deviation &&
+    left.frequency === right.frequency &&
+    left.smoothness === right.smoothness &&
+    left.keepFocusOnTitle === right.keepFocusOnTitle &&
+    left.focusInterval === right.focusInterval &&
+    left.cornerInterval === right.cornerInterval &&
+    left.foregroundWindowTitle === right.foregroundWindowTitle &&
+    left.enableMicroJiggle === right.enableMicroJiggle &&
+    left.enableCornerSmoothing === right.enableCornerSmoothing
+  );
 }
 
 function resolvePublicAsset(name) {
@@ -104,6 +132,17 @@ function getWindowIconPath() {
   }
 
   return alternate;
+}
+
+function applyWindowIcon(targetWindow) {
+  if (!IS_WINDOWS) {
+    return;
+  }
+
+  const windowIcon = nativeImage.createFromPath(getWindowIconPath());
+  if (!windowIcon.isEmpty()) {
+    targetWindow.setIcon(windowIcon);
+  }
 }
 
 function getState() {
@@ -304,7 +343,8 @@ public static class MouseNative {
 
         int fromX = current.X;
         int fromY = current.Y;
-        int steps = 12;
+        int steps = 6;
+        int delayMs = 2;
 
         for (int i = 1; i <= steps; i++) {
             int nextX = fromX + ((toX - fromX) * i) / steps;
@@ -318,11 +358,11 @@ public static class MouseNative {
                 current.Y = nextY;
             }
 
-            Thread.Sleep(8);
+            Thread.Sleep(delayMs);
         }
     }
 
-    public static void MoveCursorToWindowCorners(IntPtr hWnd, bool smooth) {
+    public static void MoveCursorAlongCircle(IntPtr hWnd, bool smooth) {
         if (hWnd == IntPtr.Zero) {
             return;
         }
@@ -334,41 +374,27 @@ public static class MouseNative {
 
         int width = rect.Right - rect.Left;
         int height = rect.Bottom - rect.Top;
+        int centerX = rect.Left + (width / 2);
+        int centerY = rect.Top + (height / 2);
 
-        double insetRatioX = 0.2 + (Rng.NextDouble() * 0.15);
-        double insetRatioY = 0.2 + (Rng.NextDouble() * 0.15);
-        int insetX = Math.Max(24, (int)(width * insetRatioX));
-        int insetY = Math.Max(24, (int)(height * insetRatioY));
+        double radiusRatio = 0.25 + (Rng.NextDouble() * 0.1);
+        int radius = Math.Max(24, (int)(Math.Min(width, height) * radiusRatio));
 
-        int left = rect.Left + insetX;
-        int top = rect.Top + insetY;
-        int right = rect.Right - insetX;
-        int bottom = rect.Bottom - insetY;
-
-        var points = new POINT[]
-        {
-            new POINT { X = left, Y = top },
-            new POINT { X = right, Y = top },
-            new POINT { X = right, Y = bottom },
-            new POINT { X = left, Y = bottom },
-        };
-
-        for (int i = points.Length - 1; i > 0; i--) {
-            int j = Rng.Next(i + 1);
-            var temp = points[i];
-            points[i] = points[j];
-            points[j] = temp;
-        }
+        int pointsCount = 24;
+        double phase = Rng.NextDouble() * 2.0 * Math.PI;
 
         POINT original;
         GetCursorPos(out original);
 
         try {
-            foreach (var point in points) {
+            for (int i = 0; i < pointsCount; i++) {
+                double angle = phase + (2.0 * Math.PI * i / pointsCount);
+                int x = centerX + (int)(radius * Math.Cos(angle));
+                int y = centerY + (int)(radius * Math.Sin(angle));
                 if (smooth) {
-                    MoveSmoothTo(point.X, point.Y);
+                    MoveSmoothTo(x, y);
                 } else {
-                    MoveDirectTo(point.X, point.Y);
+                    MoveDirectTo(x, y);
                 }
                 mouse_event(MOUSEEVENTF_MOVE, 1, 0, 0, UIntPtr.Zero);
                 mouse_event(MOUSEEVENTF_MOVE, -1, 0, 0, UIntPtr.Zero);
@@ -467,7 +493,7 @@ while ($true) {
         Start-Sleep -Milliseconds $frequencyMs
     }
 
-    if ($titleFilter.Length -gt 0) {
+    if ($keepFocusOnTitle -and $titleFilter.Length -gt 0) {
         $now = [DateTime]::UtcNow
         if (($now - $lastCornerAt).TotalMilliseconds -ge $cornerIntervalMs) {
             $lastCornerAt = $now
@@ -475,7 +501,7 @@ while ($true) {
                 $targetWindow = [MouseNative]::FindWindowByTitleContains($titleFilter)
             }
             if ($targetWindow -ne [IntPtr]::Zero) {
-                [MouseNative]::MoveCursorToWindowCorners($targetWindow, $enableCornerSmoothing)
+                [MouseNative]::MoveCursorAlongCircle($targetWindow, $enableCornerSmoothing)
             }
         }
     }
@@ -559,14 +585,19 @@ function registerIpcHandlers() {
   ipcMain.handle('jiggler:get-state', () => getState());
 
   ipcMain.handle('jiggler:update-settings', (_event, rawSettings) => {
-    state.settings = sanitizeSettings(rawSettings);
+    const nextSettings = sanitizeSettings(rawSettings);
+    const settingsChanged = !areSettingsEqual(state.settings, nextSettings);
+    state.settings = nextSettings;
 
-    if (state.isJigglerEnabled) {
+    if (state.isJigglerEnabled && settingsChanged) {
       stopJiggler();
       return getState();
     }
 
-    broadcastState();
+    if (!state.isJigglerEnabled && settingsChanged) {
+      broadcastState();
+    }
+
     return getState();
   });
 }
@@ -593,12 +624,7 @@ function createWindow() {
 
   state.win = new BrowserWindow(windowOptions);
   state.win.removeMenu();
-  if (IS_WINDOWS) {
-    const windowIcon = nativeImage.createFromPath(getWindowIconPath());
-    if (!windowIcon.isEmpty()) {
-      state.win.setIcon(windowIcon);
-    }
-  }
+  applyWindowIcon(state.win);
 
   if (!app.isPackaged) {
     state.win.loadURL('http://localhost:4200');

@@ -11,7 +11,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormControl, FormGroup, ReactiveFormsModule } from '@angular/forms';
 import { TuiTextfield } from '@taiga-ui/core';
 import { TuiInputSlider, TuiPulse, TuiSwitch } from '@taiga-ui/kit';
-import { debounceTime, startWith } from 'rxjs';
+import { debounceTime } from 'rxjs';
 
 @Component({
   selector: 'app-main',
@@ -27,10 +27,12 @@ export class Main {
   protected readonly isEnabled = signal(false);
   protected readonly showMicroFields = signal(false);
   protected readonly showFocusFields = signal(false);
+  protected readonly isInitialized = signal(false);
 
   readonly statusClass = computed(() => (this.isEnabled() ? 'text-green-500!' : 'text-red-500!'));
 
   protected readonly form = new FormGroup({
+    enableMicroJiggle: new FormControl(false, { nonNullable: true }),
     deviation: new FormControl(10, { nonNullable: true }),
     frequency: new FormControl(1000, { nonNullable: true }),
     smoothness: new FormControl(10, { nonNullable: true }),
@@ -38,7 +40,6 @@ export class Main {
     focusInterval: new FormControl(3000, { nonNullable: true }),
     cornerInterval: new FormControl(3000, { nonNullable: true }),
     foregroundWindowTitle: new FormControl('', { nonNullable: true }),
-    enableMicroJiggle: new FormControl(false, { nonNullable: true }),
     enableCornerSmoothing: new FormControl(false, { nonNullable: true }),
   });
 
@@ -62,8 +63,11 @@ export class Main {
     });
 
     this.form.valueChanges
-      .pipe(startWith(this.form.getRawValue()), debounceTime(100), takeUntilDestroyed())
+      .pipe(debounceTime(100), takeUntilDestroyed())
       .subscribe((rawSettings) => {
+        if (!this.isInitialized()) {
+          return;
+        }
         this.showMicroFields.set(rawSettings.enableMicroJiggle ?? false);
         this.showFocusFields.set(rawSettings.keepFocusOnTitle ?? false);
 
@@ -89,6 +93,7 @@ export class Main {
     this.showFocusFields.set(state.settings.keepFocusOnTitle);
 
     this.form.patchValue(state.settings, { emitEvent: false });
+    this.isInitialized.set(true);
     this.cdr.markForCheck();
   }
 }

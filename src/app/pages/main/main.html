@@ -48,7 +48,7 @@
   @if (showFocusFields()) {
     <div class="row grid grid-cols-2 gap-4">
       <tui-textfield>
-        <label tuiLabel>Интервал возврата фокуса</label>
+        <label tuiLabel>Частота возврата фокуса</label>
 
         <input
           prefix="ms "
@@ -61,8 +61,8 @@
         <input tuiSlider type="range" [step]="100" formControlName="focusInterval" />
       </tui-textfield>
 
-      <tui-textfield>
-        <label tuiLabel>Интервал прыжков по углам</label>
+    <tui-textfield>
+      <label tuiLabel>Частота движения по окружности</label>
 
         <input
           prefix="ms "
@@ -72,9 +72,10 @@
           formControlName="cornerInterval"
         />
 
-        <input tuiSlider type="range" [step]="100" formControlName="cornerInterval" />
-      </tui-textfield>
-    </div>
+      <input tuiSlider type="range" [step]="100" formControlName="cornerInterval" />
+    </tui-textfield>
+
+  </div>
 
     <tui-textfield>
       <label tuiLabel>Часть заголовка окна</label>
@@ -87,7 +88,7 @@
     </tui-textfield>
   }
   <label class="focus-toggle">
-      <input tuiSwitch type="checkbox" formControlName="enableCornerSmoothing" />
-      Плавные прыжки по углам
-    </label>
+    <input tuiSwitch type="checkbox" formControlName="enableCornerSmoothing" />
+    Плавное движение по окружности
+  </label>
 </form>
