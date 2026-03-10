@@ -15,7 +15,7 @@ import { debounceTime, startWith } from 'rxjs';
 
 @Component({
   selector: 'app-main',
-  imports: [ReactiveFormsModule, TuiInputSlider, TuiTextfield, TuiPulse, TuiCheckbox],
+  imports: [ReactiveFormsModule, TuiInputSlider, TuiTextfield, TuiPulse, TuiCheckbox, TuiTextfield],
   templateUrl: './main.html',
   styleUrl: './main.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -36,6 +36,7 @@ export class Main {
     focusInterval: new FormControl(3000, { nonNullable: true }),
     foregroundWindowTitle: new FormControl('', { nonNullable: true }),
     enableMicroJiggle: new FormControl(false, { nonNullable: true }),
+    enableCornerSmoothing: new FormControl(false, { nonNullable: true }),
   });
 
   constructor() {
@@ -68,6 +69,7 @@ export class Main {
           focusInterval: rawSettings.focusInterval ?? 3000,
           foregroundWindowTitle: rawSettings.foregroundWindowTitle ?? '',
           enableMicroJiggle: rawSettings.enableMicroJiggle ?? false,
+          enableCornerSmoothing: rawSettings.enableCornerSmoothing ?? false,
         };
 
         api.updateSettings(settings);

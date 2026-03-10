@@ -33,10 +33,15 @@
     <input tuiSlider type="range" [step]="1" formControlName="smoothness" />
   </tui-textfield>
 
-  <div class="grid grid-cols-2 gap-4">
+  <div class="grid grid-cols-2 gap-4 px-2">
     <label class="focus-toggle">
       <input size="s" tuiCheckbox type="checkbox" formControlName="enableMicroJiggle" />
-      Постоянно подергивать мышь
+      Подергивать мышь
+    </label>
+
+    <label class="focus-toggle">
+      <input size="s" tuiCheckbox type="checkbox" formControlName="enableCornerSmoothing" />
+      Плавные прыжки по углам
     </label>
 
     <label class="focus-toggle">
@@ -45,15 +50,10 @@
     </label>
   </div>
 
-  <label class="text-field">
-    <span class="text-field__label">Часть заголовка окна</span>
-    <input
-      class="text-field__input"
-      type="text"
-      placeholder="например: VMware Horizon Client"
-      formControlName="foregroundWindowTitle"
-    />
-  </label>
+  <tui-textfield>
+    <label tuiLabel>Часть заголовка окна</label>
+    <input type="text" placeholder="например: VMware Horizon Client" formControlName="foregroundWindowTitle" tuiTextfield />
+  </tui-textfield>
 
   <tui-textfield>
     <label tuiLabel>Интервал возврата фокуса</label>

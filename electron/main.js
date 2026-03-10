@@ -19,6 +19,7 @@ const DEFAULT_SETTINGS = {
   focusInterval: 3000,
   foregroundWindowTitle: '',
   enableMicroJiggle: true,
+  enableCornerSmoothing: false,
 };
 
 const TRAY_ICON_FILES = {
@@ -47,6 +48,10 @@ function sanitizeSettings(raw) {
       input.enableMicroJiggle === undefined
         ? DEFAULT_SETTINGS.enableMicroJiggle
         : Boolean(input.enableMicroJiggle),
+    enableCornerSmoothing:
+      input.enableCornerSmoothing === undefined
+        ? DEFAULT_SETTINGS.enableCornerSmoothing
+        : Boolean(input.enableCornerSmoothing),
   };
 }
 
@@ -284,7 +289,31 @@ public static class MouseNative {
         }
     }
 
-    public static void MoveCursorToWindowCorners(IntPtr hWnd) {
+    private static void MoveSmoothTo(int toX, int toY) {
+        POINT current;
+        GetCursorPos(out current);
+
+        int fromX = current.X;
+        int fromY = current.Y;
+        int steps = 12;
+
+        for (int i = 1; i <= steps; i++) {
+            int nextX = fromX + ((toX - fromX) * i) / steps;
+            int nextY = fromY + ((toY - fromY) * i) / steps;
+            int dx = nextX - current.X;
+            int dy = nextY - current.Y;
+
+            if (dx != 0 || dy != 0) {
+                mouse_event(MOUSEEVENTF_MOVE, dx, dy, 0, UIntPtr.Zero);
+                current.X = nextX;
+                current.Y = nextY;
+            }
+
+            Thread.Sleep(8);
+        }
+    }
+
+    public static void MoveCursorToWindowCorners(IntPtr hWnd, bool smooth) {
         if (hWnd == IntPtr.Zero) {
             return;
         }
@@ -327,7 +356,11 @@ public static class MouseNative {
 
         try {
             foreach (var point in points) {
-                MoveDirectTo(point.X, point.Y);
+                if (smooth) {
+                    MoveSmoothTo(point.X, point.Y);
+                } else {
+                    MoveDirectTo(point.X, point.Y);
+                }
                 mouse_event(MOUSEEVENTF_MOVE, 1, 0, 0, UIntPtr.Zero);
                 mouse_event(MOUSEEVENTF_MOVE, -1, 0, 0, UIntPtr.Zero);
             }
@@ -349,6 +382,7 @@ $keepFocusOnTitle = ${settings.keepFocusOnTitle ? '$true' : '$false'}
 $focusIntervalMs = ${settings.focusInterval}
 $titleFilter = '${titleFilter}'
 $enableMicroJiggle = ${settings.enableMicroJiggle ? '$true' : '$false'}
+$enableCornerSmoothing = ${settings.enableCornerSmoothing ? '$true' : '$false'}
 $lastFocusAt = [DateTime]::UtcNow.AddMilliseconds(-$focusIntervalMs)
 
 while ($true) {
@@ -427,7 +461,7 @@ while ($true) {
             $targetWindow = [MouseNative]::FindWindowByTitleContains($titleFilter)
         }
         if ($targetWindow -ne [IntPtr]::Zero) {
-            [MouseNative]::MoveCursorToWindowCorners($targetWindow)
+            [MouseNative]::MoveCursorToWindowCorners($targetWindow, $enableCornerSmoothing)
         }
     }
 }

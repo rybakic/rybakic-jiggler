@@ -6,6 +6,7 @@ interface JigglerSettings {
   focusInterval: number;
   foregroundWindowTitle: string;
   enableMicroJiggle: boolean;
+  enableCornerSmoothing: boolean;
 }
 
 interface JigglerState {
