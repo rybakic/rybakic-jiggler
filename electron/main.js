@@ -9,12 +9,19 @@ const hasSingleInstanceLock = app.requestSingleInstanceLock();
 
 const DEFAULT_SETTINGS = {
   enableMicroJiggle: false,
-  deviation: 10,
-  frequency: 1000,
-  smoothness: 10,
+  enableKeypress: false,
+  deviation: [4, 12],
+  frequency: [700, 1400],
+  smoothness: [6, 12],
+  keypressInterval: [6000, 12000],
+  enableScroll: false,
+  scrollInterval: [7000, 13000],
+  scrollAmount: [60, 160],
+  enableClick: false,
+  clickInterval: [8000, 15000],
   keepFocusOnTitle: true,
-  focusInterval: 3000,
-  cornerInterval: 3000,
+  focusInterval: [2500, 4500],
+  cornerInterval: [2500, 4500],
   foregroundWindowTitle: '',
   enableCornerSmoothing: false,
 };
@@ -55,18 +62,44 @@ function toNumber(value, fallback) {
   return numeric;
 }
 
+function normalizeRange(value, fallback, minLimit, maxLimit) {
+  const raw = Array.isArray(value) ? value : [value, value];
+  const fallbackMin = Array.isArray(fallback) ? fallback[0] : fallback;
+  const fallbackMax = Array.isArray(fallback) ? fallback[1] : fallback;
+
+  let min = clamp(Math.round(toNumber(raw[0], fallbackMin)), minLimit, maxLimit);
+  let max = clamp(Math.round(toNumber(raw[1], fallbackMax)), minLimit, maxLimit);
+
+  if (min > max) {
+    [min, max] = [max, min];
+  }
+
+  return [min, max];
+}
+
+function areRangesEqual(left, right) {
+  return left[0] === right[0] && left[1] === right[1];
+}
+
 function sanitizeSettings(raw) {
   const input = raw ?? {};
 
   return {
-    deviation: clamp(Math.round(toNumber(input.deviation, DEFAULT_SETTINGS.deviation)), 1, 100),
-    frequency: clamp(Math.round(toNumber(input.frequency, DEFAULT_SETTINGS.frequency)), 100, 10000),
-    smoothness: clamp(Math.round(toNumber(input.smoothness, DEFAULT_SETTINGS.smoothness)), 1, 20),
+    deviation: normalizeRange(input.deviation, DEFAULT_SETTINGS.deviation, 1, 100),
+    frequency: normalizeRange(input.frequency, DEFAULT_SETTINGS.frequency, 100, 10000),
+    smoothness: normalizeRange(input.smoothness, DEFAULT_SETTINGS.smoothness, 1, 20),
+    keypressInterval: normalizeRange(input.keypressInterval, DEFAULT_SETTINGS.keypressInterval, 1000, 20000),
+    enableScroll: toBoolean(input.enableScroll, DEFAULT_SETTINGS.enableScroll),
+    scrollInterval: normalizeRange(input.scrollInterval, DEFAULT_SETTINGS.scrollInterval, 1500, 30000),
+    scrollAmount: normalizeRange(input.scrollAmount, DEFAULT_SETTINGS.scrollAmount, 30, 360),
+    enableClick: toBoolean(input.enableClick, DEFAULT_SETTINGS.enableClick),
+    clickInterval: normalizeRange(input.clickInterval, DEFAULT_SETTINGS.clickInterval, 1500, 30000),
     keepFocusOnTitle: toBoolean(input.keepFocusOnTitle, DEFAULT_SETTINGS.keepFocusOnTitle),
-    focusInterval: clamp(Math.round(toNumber(input.focusInterval, DEFAULT_SETTINGS.focusInterval)), 1000, 10000),
-    cornerInterval: clamp(Math.round(toNumber(input.cornerInterval, DEFAULT_SETTINGS.cornerInterval)), 500, 10000),
+    focusInterval: normalizeRange(input.focusInterval, DEFAULT_SETTINGS.focusInterval, 1000, 10000),
+    cornerInterval: normalizeRange(input.cornerInterval, DEFAULT_SETTINGS.cornerInterval, 500, 10000),
     foregroundWindowTitle: String(input.foregroundWindowTitle ?? '').slice(0, 200),
     enableMicroJiggle: toBoolean(input.enableMicroJiggle, DEFAULT_SETTINGS.enableMicroJiggle),
+    enableKeypress: toBoolean(input.enableKeypress, DEFAULT_SETTINGS.enableKeypress),
     enableCornerSmoothing: toBoolean(
       input.enableCornerSmoothing,
       DEFAULT_SETTINGS.enableCornerSmoothing,
@@ -76,14 +109,21 @@ function sanitizeSettings(raw) {
 
 function areSettingsEqual(left, right) {
   return (
-    left.deviation === right.deviation &&
-    left.frequency === right.frequency &&
-    left.smoothness === right.smoothness &&
+    areRangesEqual(left.deviation, right.deviation) &&
+    areRangesEqual(left.frequency, right.frequency) &&
+    areRangesEqual(left.smoothness, right.smoothness) &&
+    areRangesEqual(left.keypressInterval, right.keypressInterval) &&
+    left.enableScroll === right.enableScroll &&
+    areRangesEqual(left.scrollInterval, right.scrollInterval) &&
+    areRangesEqual(left.scrollAmount, right.scrollAmount) &&
+    left.enableClick === right.enableClick &&
+    areRangesEqual(left.clickInterval, right.clickInterval) &&
     left.keepFocusOnTitle === right.keepFocusOnTitle &&
-    left.focusInterval === right.focusInterval &&
-    left.cornerInterval === right.cornerInterval &&
+    areRangesEqual(left.focusInterval, right.focusInterval) &&
+    areRangesEqual(left.cornerInterval, right.cornerInterval) &&
     left.foregroundWindowTitle === right.foregroundWindowTitle &&
     left.enableMicroJiggle === right.enableMicroJiggle &&
+    left.enableKeypress === right.enableKeypress &&
     left.enableCornerSmoothing === right.enableCornerSmoothing
   );
 }
@@ -224,6 +264,24 @@ using System.Threading;
 
 public static class MouseNative {
     public const uint MOUSEEVENTF_MOVE = 0x0001;
+    public const uint MOUSEEVENTF_WHEEL = 0x0800;
+    public const uint MOUSEEVENTF_LEFTDOWN = 0x0002;
+    public const uint MOUSEEVENTF_LEFTUP = 0x0004;
+    public const uint KEYEVENTF_KEYUP = 0x0002;
+    public const byte VK_PAUSE = 0x13;
+    public const byte VK_F13 = 0x7C;
+    public const byte VK_F14 = 0x7D;
+    public const byte VK_F15 = 0x7E;
+    public const byte VK_F16 = 0x7F;
+    public const byte VK_F17 = 0x80;
+    public const byte VK_F18 = 0x81;
+    public const byte VK_F19 = 0x82;
+    public const byte VK_F20 = 0x83;
+    public const byte VK_F21 = 0x84;
+    public const byte VK_F22 = 0x85;
+    public const byte VK_F23 = 0x86;
+    public const byte VK_F24 = 0x87;
+    public const byte VK_SCROLL = 0x91;
     public const int SW_SHOW = 5;
     public const int SW_MAXIMIZE = 3;
     private static readonly Random Rng = new Random();
@@ -271,7 +329,10 @@ public static class MouseNative {
     public static extern bool GetWindowRect(IntPtr hWnd, out RECT rect);
 
     [DllImport("user32.dll")]
-    public static extern void mouse_event(uint dwFlags, int dx, int dy, uint dwData, UIntPtr dwExtraInfo);
+    public static extern void mouse_event(uint dwFlags, int dx, int dy, int dwData, UIntPtr dwExtraInfo);
+
+    [DllImport("user32.dll")]
+    public static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, UIntPtr dwExtraInfo);
 
     public delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
 
@@ -407,27 +468,155 @@ public static class MouseNative {
             MoveDirectTo(original.X, original.Y);
         }
     }
+
+    public static void TapKey(byte key) {
+        keybd_event(key, 0, 0, UIntPtr.Zero);
+        Thread.Sleep(8);
+        keybd_event(key, 0, KEYEVENTF_KEYUP, UIntPtr.Zero);
+    }
+
+    public static void MouseWheel(int delta) {
+        mouse_event(MOUSEEVENTF_WHEEL, 0, 0, delta, UIntPtr.Zero);
+    }
+
+    public static void MouseClick() {
+        mouse_event(MOUSEEVENTF_LEFTDOWN, 0, 0, 0, UIntPtr.Zero);
+        Thread.Sleep(6);
+        mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, UIntPtr.Zero);
+    }
+
+    public static bool GetWindowCenter(IntPtr hWnd, out int x, out int y) {
+        x = 0;
+        y = 0;
+        if (hWnd == IntPtr.Zero) {
+            return false;
+        }
+
+        RECT rect;
+        if (!GetWindowRect(hWnd, out rect)) {
+            return false;
+        }
+
+        x = rect.Left + ((rect.Right - rect.Left) / 2);
+        y = rect.Top + ((rect.Bottom - rect.Top) / 2);
+        return true;
+    }
+
 }
 "@
 
-$deviation = ${settings.deviation}
-$frequencyMs = ${settings.frequency}
-$smoothness = ${settings.smoothness}
+$deviationMin = ${settings.deviation[0]}
+$deviationMax = ${settings.deviation[1]}
+$frequencyMinMs = ${settings.frequency[0]}
+$frequencyMaxMs = ${settings.frequency[1]}
+$smoothnessMin = ${settings.smoothness[0]}
+$smoothnessMax = ${settings.smoothness[1]}
+$keypressIntervalMinMs = ${settings.keypressInterval[0]}
+$keypressIntervalMaxMs = ${settings.keypressInterval[1]}
+$enableScroll = ${settings.enableScroll ? '$true' : '$false'}
+$scrollIntervalMinMs = ${settings.scrollInterval[0]}
+$scrollIntervalMaxMs = ${settings.scrollInterval[1]}
+$scrollAmountMin = ${settings.scrollAmount[0]}
+$scrollAmountMax = ${settings.scrollAmount[1]}
+$enableClick = ${settings.enableClick ? '$true' : '$false'}
+$clickIntervalMinMs = ${settings.clickInterval[0]}
+$clickIntervalMaxMs = ${settings.clickInterval[1]}
 $keepFocusOnTitle = ${settings.keepFocusOnTitle ? '$true' : '$false'}
-$focusIntervalMs = ${settings.focusInterval}
-$cornerIntervalMs = ${settings.cornerInterval}
+$focusIntervalMinMs = ${settings.focusInterval[0]}
+$focusIntervalMaxMs = ${settings.focusInterval[1]}
+$cornerIntervalMinMs = ${settings.cornerInterval[0]}
+$cornerIntervalMaxMs = ${settings.cornerInterval[1]}
 $titleFilter = '${titleFilter}'
 $enableMicroJiggle = ${settings.enableMicroJiggle ? '$true' : '$false'}
+$enableKeypress = ${settings.enableKeypress ? '$true' : '$false'}
 $enableCornerSmoothing = ${settings.enableCornerSmoothing ? '$true' : '$false'}
-$lastFocusAt = [DateTime]::UtcNow.AddMilliseconds(-$focusIntervalMs)
-$lastCornerAt = [DateTime]::UtcNow.AddMilliseconds(-$cornerIntervalMs)
+
+function Get-RandomInRange([int]$min, [int]$max) {
+    if ($min -gt $max) {
+        $tmp = $min
+        $min = $max
+        $max = $tmp
+    }
+    if ($min -eq $max) {
+        return $min
+    }
+    return Get-Random -Minimum $min -Maximum ($max + 1)
+}
+
+function RestoreCursor([MouseNative+POINT]$target) {
+    for ($i = 0; $i -lt 6; $i++) {
+        [MouseNative]::SetCursorPos($target.X, $target.Y)
+        Start-Sleep -Milliseconds 12
+        $current = [MouseNative]::GetCursorPosition()
+        $dx = [Math]::Abs($current.X - $target.X)
+        $dy = [Math]::Abs($current.Y - $target.Y)
+        if ($dx -le 2 -and $dy -le 2) {
+            return
+        }
+    }
+}
+
+function ShouldRestoreCursor([int]$centerX, [int]$centerY) {
+    $current = [MouseNative]::GetCursorPosition()
+    $dx = [Math]::Abs($current.X - $centerX)
+    $dy = [Math]::Abs($current.Y - $centerY)
+    return ($dx -le 8 -and $dy -le 8)
+}
+
+function IsPointInRect([MouseNative+POINT]$point, [MouseNative+RECT]$rect) {
+    return ($point.X -ge $rect.Left -and $point.X -le $rect.Right -and $point.Y -ge $rect.Top -and $point.Y -le $rect.Bottom)
+}
+
+$now = [DateTime]::UtcNow
+$nextFocusAt = $now.AddMilliseconds($(Get-RandomInRange $focusIntervalMinMs $focusIntervalMaxMs))
+$nextCornerAt = $now.AddMilliseconds($(Get-RandomInRange $cornerIntervalMinMs $cornerIntervalMaxMs))
+$nextKeypressAt = $now.AddMilliseconds($(Get-RandomInRange $keypressIntervalMinMs $keypressIntervalMaxMs))
+$nextScrollAt = $now.AddMilliseconds($(Get-RandomInRange $scrollIntervalMinMs $scrollIntervalMaxMs))
+$nextClickAt = $now.AddMilliseconds($(Get-RandomInRange $clickIntervalMinMs $clickIntervalMaxMs))
+$scrollPolarity = 1
+$idleThresholdMs = 700
+$lastCursorPos = [MouseNative]::GetCursorPosition()
+$lastCursorMoveAt = [DateTime]::UtcNow
+$keypressKeys = @(
+    [MouseNative]::VK_SCROLL,
+    [MouseNative]::VK_PAUSE,
+    [MouseNative]::VK_F13,
+    [MouseNative]::VK_F14,
+    [MouseNative]::VK_F15,
+    [MouseNative]::VK_F16,
+    [MouseNative]::VK_F17,
+    [MouseNative]::VK_F18,
+    [MouseNative]::VK_F19,
+    [MouseNative]::VK_F20,
+    [MouseNative]::VK_F21,
+    [MouseNative]::VK_F22,
+    [MouseNative]::VK_F23,
+    [MouseNative]::VK_F24
+)
+
+function Update-CursorIdleState {
+    $current = [MouseNative]::GetCursorPosition()
+    $dx = [Math]::Abs($current.X - $lastCursorPos.X)
+    $dy = [Math]::Abs($current.Y - $lastCursorPos.Y)
+    if ($dx -gt 2 -or $dy -gt 2) {
+        $script:lastCursorPos = $current
+        $script:lastCursorMoveAt = [DateTime]::UtcNow
+    }
+}
+
+function Is-CursorIdle([int]$thresholdMs) {
+    Update-CursorIdleState
+    $elapsed = ([DateTime]::UtcNow - $lastCursorMoveAt).TotalMilliseconds
+    return ($elapsed -ge $thresholdMs)
+}
 
 while ($true) {
+    Update-CursorIdleState
     $targetWindow = $null
     if ($keepFocusOnTitle -and $titleFilter.Length -gt 0) {
         $now = [DateTime]::UtcNow
-        if (($now - $lastFocusAt).TotalMilliseconds -ge $focusIntervalMs) {
-            $lastFocusAt = $now
+        if ($now -ge $nextFocusAt) {
+            $nextFocusAt = $now.AddMilliseconds($(Get-RandomInRange $focusIntervalMinMs $focusIntervalMaxMs))
             $targetWindow = [MouseNative]::FindWindowByTitleContains($titleFilter)
             if ($targetWindow -ne [IntPtr]::Zero) {
                 $currentForeground = [MouseNative]::GetForegroundWindow()
@@ -440,6 +629,7 @@ while ($true) {
     }
 
     if ($enableMicroJiggle) {
+        $deviation = Get-RandomInRange $deviationMin $deviationMax
         $dx = Get-Random -Minimum (-$deviation) -Maximum ($deviation + 1)
         $dy = Get-Random -Minimum (-$deviation) -Maximum ($deviation + 1)
 
@@ -447,8 +637,8 @@ while ($true) {
             $dx = 1
         }
 
-        $cycleMs = [Math]::Max([int]$frequencyMs, 100)
-        $stepCount = [Math]::Max($smoothness, 1)
+        $cycleMs = [Math]::Max([int]($(Get-RandomInRange $frequencyMinMs $frequencyMaxMs)), 100)
+        $stepCount = [Math]::Max([int]($(Get-RandomInRange $smoothnessMin $smoothnessMax)), 1)
 
         # Короткое "касание" мыши: быстро ушли/вернулись и дали курсору свободно жить до следующего цикла.
         $motionBudgetMs = [Math]::Min([int]($cycleMs * 0.35), 220)
@@ -490,13 +680,173 @@ while ($true) {
             Start-Sleep -Milliseconds $restMs
         }
     } else {
-        Start-Sleep -Milliseconds $frequencyMs
+        $idleSleepMs = [Math]::Max([int]($(Get-RandomInRange $frequencyMinMs $frequencyMaxMs)), 100)
+        Start-Sleep -Milliseconds $idleSleepMs
+    }
+
+    $now = [DateTime]::UtcNow
+    if ($enableKeypress -and ($now -ge $nextKeypressAt)) {
+        $nextKeypressAt = $now.AddMilliseconds($(Get-RandomInRange $keypressIntervalMinMs $keypressIntervalMaxMs))
+        if (-not (Is-CursorIdle $idleThresholdMs)) {
+            continue
+        }
+        if ($titleFilter.Length -gt 0) {
+            $keyTarget = [MouseNative]::FindWindowByTitleContains($titleFilter)
+            if ($keyTarget -ne [IntPtr]::Zero) {
+                $originalForeground = [MouseNative]::GetForegroundWindow()
+                [MouseNative]::ShowWindow($keyTarget, [MouseNative]::SW_SHOW) | Out-Null
+                [MouseNative]::SetForegroundWindow($keyTarget) | Out-Null
+                $original = [MouseNative]::GetCursorPosition()
+                $rect = New-Object MouseNative+RECT
+                $hasRect = [MouseNative]::GetWindowRect($keyTarget, [ref]$rect)
+                $originalInside = $false
+                if ($hasRect) {
+                    $originalInside = IsPointInRect $original $rect
+                }
+                $centerX = 0
+                $centerY = 0
+                $hasCenter = [MouseNative]::GetWindowCenter($keyTarget, [ref]$centerX, [ref]$centerY)
+                if ($hasCenter) {
+                    [MouseNative]::SetCursorPos($centerX, $centerY)
+                    Start-Sleep -Milliseconds 12
+                }
+                $key = Get-Random -InputObject $keypressKeys
+                [MouseNative]::TapKey($key)
+                Start-Sleep -Milliseconds 35
+                if ($originalForeground -and $originalForeground -ne [IntPtr]::Zero -and $originalForeground -ne $keyTarget) {
+                    [MouseNative]::SetForegroundWindow($originalForeground) | Out-Null
+                    Start-Sleep -Milliseconds 8
+                }
+                if ($hasCenter) {
+                    if ($originalInside) {
+                        if (ShouldRestoreCursor $centerX $centerY) {
+                            RestoreCursor $original
+                        }
+                    } else {
+                        $current = [MouseNative]::GetCursorPosition()
+                        if ($hasRect -and (IsPointInRect $current $rect)) {
+                            RestoreCursor $original
+                        }
+                    }
+                }
+                continue
+            }
+        }
+        $key = Get-Random -InputObject $keypressKeys
+        [MouseNative]::TapKey($key)
+    }
+
+    if ($enableScroll -and ($now -ge $nextScrollAt)) {
+        $nextScrollAt = $now.AddMilliseconds($(Get-RandomInRange $scrollIntervalMinMs $scrollIntervalMaxMs))
+        if (-not (Is-CursorIdle $idleThresholdMs)) {
+            continue
+        }
+        $deltaBase = [Math]::Max([int]($(Get-RandomInRange $scrollAmountMin $scrollAmountMax)), 1)
+        $delta = $deltaBase * $scrollPolarity
+        $scrollPolarity = -1 * $scrollPolarity
+
+        if ($titleFilter.Length -gt 0) {
+            $scrollTarget = [MouseNative]::FindWindowByTitleContains($titleFilter)
+            if ($scrollTarget -ne [IntPtr]::Zero) {
+                $originalForeground = [MouseNative]::GetForegroundWindow()
+                [MouseNative]::ShowWindow($scrollTarget, [MouseNative]::SW_SHOW) | Out-Null
+                [MouseNative]::SetForegroundWindow($scrollTarget) | Out-Null
+                $original = [MouseNative]::GetCursorPosition()
+                $rect = New-Object MouseNative+RECT
+                $hasRect = [MouseNative]::GetWindowRect($scrollTarget, [ref]$rect)
+                $originalInside = $false
+                if ($hasRect) {
+                    $originalInside = IsPointInRect $original $rect
+                }
+                $centerX = 0
+                $centerY = 0
+                $hasCenter = [MouseNative]::GetWindowCenter($scrollTarget, [ref]$centerX, [ref]$centerY)
+                if ($hasCenter) {
+                    [MouseNative]::SetCursorPos($centerX, $centerY)
+                    Start-Sleep -Milliseconds 12
+                }
+                [MouseNative]::MouseWheel($delta)
+                Start-Sleep -Milliseconds 35
+                if ($originalForeground -and $originalForeground -ne [IntPtr]::Zero -and $originalForeground -ne $scrollTarget) {
+                    [MouseNative]::SetForegroundWindow($originalForeground) | Out-Null
+                    Start-Sleep -Milliseconds 8
+                }
+                if ($hasCenter) {
+                    if ($originalInside) {
+                        if (ShouldRestoreCursor $centerX $centerY) {
+                            RestoreCursor $original
+                        }
+                    } else {
+                        $current = [MouseNative]::GetCursorPosition()
+                        if ($hasRect -and (IsPointInRect $current $rect)) {
+                            RestoreCursor $original
+                        }
+                    }
+                }
+                continue
+            }
+        }
+
+        [MouseNative]::MouseWheel($delta)
+    }
+
+    if ($enableClick -and ($now -ge $nextClickAt)) {
+        $nextClickAt = $now.AddMilliseconds($(Get-RandomInRange $clickIntervalMinMs $clickIntervalMaxMs))
+        if (-not (Is-CursorIdle $idleThresholdMs)) {
+            continue
+        }
+        if ($titleFilter.Length -eq 0) {
+            continue
+        }
+        $clickTarget = [MouseNative]::FindWindowByTitleContains($titleFilter)
+        if ($clickTarget -eq [IntPtr]::Zero) {
+            continue
+        }
+        $originalForeground = [MouseNative]::GetForegroundWindow()
+        [MouseNative]::ShowWindow($clickTarget, [MouseNative]::SW_SHOW) | Out-Null
+        [MouseNative]::SetForegroundWindow($clickTarget) | Out-Null
+        $original = [MouseNative]::GetCursorPosition()
+        $rect = New-Object MouseNative+RECT
+        $hasRect = [MouseNative]::GetWindowRect($clickTarget, [ref]$rect)
+        $originalInside = $false
+        if ($hasRect) {
+            $originalInside = IsPointInRect $original $rect
+        }
+        $centerX = 0
+        $centerY = 0
+        $hasCenter = [MouseNative]::GetWindowCenter($clickTarget, [ref]$centerX, [ref]$centerY)
+        if ($hasCenter) {
+            [MouseNative]::SetCursorPos($centerX, $centerY)
+            Start-Sleep -Milliseconds 12
+        }
+        [MouseNative]::MouseClick()
+        Start-Sleep -Milliseconds 35
+        if ($originalForeground -and $originalForeground -ne [IntPtr]::Zero -and $originalForeground -ne $clickTarget) {
+            [MouseNative]::SetForegroundWindow($originalForeground) | Out-Null
+            Start-Sleep -Milliseconds 8
+        }
+        if ($hasCenter) {
+            if ($originalInside) {
+                if (ShouldRestoreCursor $centerX $centerY) {
+                    RestoreCursor $original
+                }
+            } else {
+                $current = [MouseNative]::GetCursorPosition()
+                if ($hasRect -and (IsPointInRect $current $rect)) {
+                    RestoreCursor $original
+                }
+            }
+        }
+        continue
     }
 
     if ($keepFocusOnTitle -and $titleFilter.Length -gt 0) {
         $now = [DateTime]::UtcNow
-        if (($now - $lastCornerAt).TotalMilliseconds -ge $cornerIntervalMs) {
-            $lastCornerAt = $now
+        if ($now -ge $nextCornerAt) {
+            $nextCornerAt = $now.AddMilliseconds($(Get-RandomInRange $cornerIntervalMinMs $cornerIntervalMaxMs))
+            if (-not (Is-CursorIdle $idleThresholdMs)) {
+                continue
+            }
             if (-not $targetWindow -or $targetWindow -eq [IntPtr]::Zero) {
                 $targetWindow = [MouseNative]::FindWindowByTitleContains($titleFilter)
             }
@@ -511,6 +861,9 @@ while ($true) {
 
 function spawnJigglerProcess(settings) {
   if (IS_WINDOWS) {
+    const logPath = path.join(app.getPath('userData'), 'jiggler.log');
+    fs.writeFileSync(logPath, '', { encoding: 'utf8' });
+
     return spawn(
       'powershell.exe',
       [
@@ -522,7 +875,7 @@ function spawnJigglerProcess(settings) {
         '-Command',
         buildJigglerScript(settings),
       ],
-      { stdio: 'ignore' },
+      { stdio: ['ignore', 'pipe', 'pipe'] },
     );
   }
 
@@ -555,6 +908,19 @@ function startJiggler() {
   }
 
   state.jigglerProcess = nextProcess;
+  const logPath = path.join(app.getPath('userData'), 'jiggler.log');
+
+  if (nextProcess.stdout) {
+    nextProcess.stdout.on('data', (chunk) => {
+      fs.appendFileSync(logPath, chunk.toString('utf8'), { encoding: 'utf8' });
+    });
+  }
+
+  if (nextProcess.stderr) {
+    nextProcess.stderr.on('data', (chunk) => {
+      fs.appendFileSync(logPath, chunk.toString('utf8'), { encoding: 'utf8' });
+    });
+  }
 
   nextProcess.once('exit', () => {
     if (state.jigglerProcess !== nextProcess) {

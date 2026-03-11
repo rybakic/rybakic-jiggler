@@ -14,30 +14,101 @@
 
   @if (showMicroFields()) {
     <div class="row grid grid-cols-2 gap-4">
-      <tui-textfield>
+      <tui-input-range
+        [min]="1"
+        [max]="100"
+        [step]="1"
+        [segments]="5"
+        [postfix]="[' px', ' px']"
+        formControlName="deviation"
+      >
         <label tuiLabel>Отклонение</label>
+      </tui-input-range>
 
-        <input prefix="px " tuiInputSlider [max]="100" [min]="1" formControlName="deviation" />
-
-        <input tuiSlider type="range" [step]="1" formControlName="deviation" />
-      </tui-textfield>
-
-      <tui-textfield>
+      <tui-input-range
+        [min]="100"
+        [max]="10000"
+        [step]="100"
+        [segments]="5"
+        [postfix]="[' ms', ' ms']"
+        formControlName="frequency"
+      >
         <label tuiLabel>Частота</label>
-
-        <input prefix="ms " tuiInputSlider [max]="10000" [min]="100" formControlName="frequency" />
-
-        <input tuiSlider type="range" [step]="100" formControlName="frequency" />
-      </tui-textfield>
+      </tui-input-range>
     </div>
 
-    <tui-textfield>
+    <tui-input-range [min]="1" [max]="20" [step]="1" [segments]="5" formControlName="smoothness">
       <label tuiLabel>Плавность</label>
+    </tui-input-range>
+  }
 
-      <input prefix="sl " tuiInputSlider [max]="20" [min]="1" formControlName="smoothness" />
+  <label class="focus-toggle">
+    <input tuiSwitch type="checkbox" formControlName="enableKeypress" />
+    Имитировать нажатие клавиши
+  </label>
 
-      <input tuiSlider type="range" [step]="1" formControlName="smoothness" />
-    </tui-textfield>
+  @if (showKeypressFields()) {
+    <tui-input-range
+      [min]="1000"
+      [max]="20000"
+      [step]="500"
+      [segments]="5"
+      [postfix]="[' ms', ' ms']"
+      formControlName="keypressInterval"
+    >
+      <label tuiLabel>Частота нажатий</label>
+    </tui-input-range>
+
+    <p class="hint">Клавиши: Scroll Lock, Pause/Break, F13–F24.</p>
+  }
+
+  <label class="focus-toggle">
+    <input tuiSwitch type="checkbox" formControlName="enableScroll" />
+    Легкий скролл
+  </label>
+
+  @if (showScrollFields()) {
+    <div class="row grid grid-cols-2 gap-4">
+      <tui-input-range
+        [min]="1500"
+        [max]="30000"
+        [step]="500"
+        [segments]="5"
+        [postfix]="[' ms', ' ms']"
+        formControlName="scrollInterval"
+      >
+        <label tuiLabel>Частота скролла</label>
+      </tui-input-range>
+
+      <tui-input-range
+        [min]="30"
+        [max]="360"
+        [step]="10"
+        [segments]="5"
+        [prefix]="['Δ ', 'Δ ']"
+        formControlName="scrollAmount"
+      >
+        <label tuiLabel>Сила скролла</label>
+      </tui-input-range>
+    </div>
+  }
+
+  <label class="focus-toggle">
+    <input tuiSwitch type="checkbox" formControlName="enableClick" />
+    Случайные клики мыши
+  </label>
+
+  @if (showClickFields()) {
+    <tui-input-range
+      [min]="1500"
+      [max]="30000"
+      [step]="500"
+      [segments]="5"
+      [postfix]="[' ms', ' ms']"
+      formControlName="clickInterval"
+    >
+      <label tuiLabel>Частота кликов</label>
+    </tui-input-range>
   }
 
   <label class="focus-toggle">
@@ -47,39 +118,33 @@
 
   @if (showFocusFields()) {
     <div class="row grid grid-cols-2 gap-4">
-      <tui-textfield>
+      <tui-input-range
+        [min]="1000"
+        [max]="10000"
+        [step]="100"
+        [segments]="5"
+        [postfix]="[' ms', ' ms']"
+        formControlName="focusInterval"
+      >
         <label tuiLabel>Частота возврата фокуса</label>
+      </tui-input-range>
 
-        <input
-          prefix="ms "
-          tuiInputSlider
-          [max]="10000"
-          [min]="1000"
-          formControlName="focusInterval"
-        />
-
-        <input tuiSlider type="range" [step]="100" formControlName="focusInterval" />
-      </tui-textfield>
-
-    <tui-textfield>
-      <label tuiLabel>Частота движения по окружности</label>
-
-        <input
-          prefix="ms "
-          tuiInputSlider
-          [max]="10000"
-          [min]="500"
-          formControlName="cornerInterval"
-        />
-
-      <input tuiSlider type="range" [step]="100" formControlName="cornerInterval" />
-    </tui-textfield>
-
-  </div>
+      <tui-input-range
+        [min]="500"
+        [max]="10000"
+        [step]="100"
+        [segments]="5"
+        [postfix]="[' ms', ' ms']"
+        formControlName="cornerInterval"
+      >
+        <label tuiLabel>Частота движения по окружности</label>
+      </tui-input-range>
+    </div>
 
     <tui-textfield>
-      <label tuiLabel>Часть заголовка окна</label>
+      <label tuiLabel for="foregroundWindowTitle">Часть заголовка окна</label>
       <input
+        id="foregroundWindowTitle"
         type="text"
         placeholder="например: TESTERS_Outstaff"
         formControlName="foregroundWindowTitle"
