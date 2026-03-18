@@ -573,6 +573,7 @@ $nextCornerAt = $now.AddMilliseconds($(Get-RandomInRange $cornerIntervalMinMs $c
 $nextKeypressAt = $now.AddMilliseconds($(Get-RandomInRange $keypressIntervalMinMs $keypressIntervalMaxMs))
 $nextScrollAt = $now.AddMilliseconds($(Get-RandomInRange $scrollIntervalMinMs $scrollIntervalMaxMs))
 $nextClickAt = $now.AddMilliseconds($(Get-RandomInRange $clickIntervalMinMs $clickIntervalMaxMs))
+$nextMicroAt = $now.AddMilliseconds($(Get-RandomInRange $frequencyMinMs $frequencyMaxMs))
 $scrollPolarity = 1
 $idleThresholdMs = 700
 $lastCursorPos = [MouseNative]::GetCursorPosition()
@@ -628,7 +629,8 @@ while ($true) {
         }
     }
 
-    if ($enableMicroJiggle) {
+    if ($enableMicroJiggle -and ($now -ge $nextMicroAt)) {
+        $nextMicroAt = $now.AddMilliseconds($(Get-RandomInRange $frequencyMinMs $frequencyMaxMs))
         $deviation = Get-RandomInRange $deviationMin $deviationMax
         $dx = Get-Random -Minimum (-$deviation) -Maximum ($deviation + 1)
         $dy = Get-Random -Minimum (-$deviation) -Maximum ($deviation + 1)
@@ -679,9 +681,6 @@ while ($true) {
         if ($restMs -gt 0) {
             Start-Sleep -Milliseconds $restMs
         }
-    } else {
-        $idleSleepMs = [Math]::Max([int]($(Get-RandomInRange $frequencyMinMs $frequencyMaxMs)), 100)
-        Start-Sleep -Milliseconds $idleSleepMs
     }
 
     $now = [DateTime]::UtcNow
@@ -812,11 +811,44 @@ while ($true) {
         if ($hasRect) {
             $originalInside = IsPointInRect $original $rect
         }
-        $centerX = 0
-        $centerY = 0
-        $hasCenter = [MouseNative]::GetWindowCenter($clickTarget, [ref]$centerX, [ref]$centerY)
-        if ($hasCenter) {
-            [MouseNative]::SetCursorPos($centerX, $centerY)
+        $targetX = 0
+        $targetY = 0
+        $hasTarget = $false
+        if ($hasRect) {
+            $width = $rect.Right - $rect.Left
+            $height = $rect.Bottom - $rect.Top
+            if ($width -gt 0 -and $height -gt 0) {
+                $marginX = [int][Math]::Round($width * 0.2)
+                $marginY = [int][Math]::Round($height * 0.2)
+                $minX = $rect.Left + $marginX
+                $maxX = $rect.Right - $marginX
+                $minY = $rect.Top + $marginY
+                $maxY = $rect.Bottom - $marginY
+                if ($minX -gt $maxX) {
+                    $minX = $rect.Left
+                    $maxX = $rect.Right
+                }
+                if ($minY -gt $maxY) {
+                    $minY = $rect.Top
+                    $maxY = $rect.Bottom
+                }
+                $targetX = Get-RandomInRange $minX $maxX
+                $targetY = Get-RandomInRange $minY $maxY
+                $hasTarget = $true
+            }
+        }
+        if (-not $hasTarget) {
+            $centerX = 0
+            $centerY = 0
+            $hasCenter = [MouseNative]::GetWindowCenter($clickTarget, [ref]$centerX, [ref]$centerY)
+            if ($hasCenter) {
+                $targetX = $centerX
+                $targetY = $centerY
+                $hasTarget = $true
+            }
+        }
+        if ($hasTarget) {
+            [MouseNative]::SetCursorPos($targetX, $targetY)
             Start-Sleep -Milliseconds 12
         }
         [MouseNative]::MouseClick()
@@ -825,9 +857,9 @@ while ($true) {
             [MouseNative]::SetForegroundWindow($originalForeground) | Out-Null
             Start-Sleep -Milliseconds 8
         }
-        if ($hasCenter) {
+        if ($hasTarget) {
             if ($originalInside) {
-                if (ShouldRestoreCursor $centerX $centerY) {
+                if (ShouldRestoreCursor $targetX $targetY) {
                     RestoreCursor $original
                 }
             } else {
@@ -854,6 +886,21 @@ while ($true) {
                 [MouseNative]::MoveCursorAlongCircle($targetWindow, $enableCornerSmoothing)
             }
         }
+    }
+
+    $now = [DateTime]::UtcNow
+    $nextWake = $nextClickAt
+    if ($nextFocusAt -lt $nextWake) { $nextWake = $nextFocusAt }
+    if ($nextCornerAt -lt $nextWake) { $nextWake = $nextCornerAt }
+    if ($nextKeypressAt -lt $nextWake) { $nextWake = $nextKeypressAt }
+    if ($nextScrollAt -lt $nextWake) { $nextWake = $nextScrollAt }
+    if ($enableMicroJiggle -and ($nextMicroAt -lt $nextWake)) { $nextWake = $nextMicroAt }
+
+    $sleepMs = [int]([Math]::Max([Math]::Min(($nextWake - $now).TotalMilliseconds, 200), 50))
+    if ($sleepMs -gt 0) {
+        Start-Sleep -Milliseconds $sleepMs
+    } else {
+        Start-Sleep -Milliseconds 10
     }
 }
 `;
@@ -970,12 +1017,10 @@ function registerIpcHandlers() {
 
 function createWindow() {
   const windowOptions = {
-    width: 550,
-    height: 550,
-    resizable: false,
-    minimizable: false,
-    maximizable: false,
-    fullscreenable: false,
+    resizable: true,
+    minimizable: true,
+    maximizable: true,
+    fullscreenable: true,
     title: 'RYBAKIČ - Mouse Jiggler',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -991,6 +1036,7 @@ function createWindow() {
   state.win = new BrowserWindow(windowOptions);
   state.win.removeMenu();
   applyWindowIcon(state.win);
+  state.win.maximize();
 
   if (!app.isPackaged) {
     state.win.loadURL('http://localhost:4200');

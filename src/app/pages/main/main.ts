@@ -23,8 +23,12 @@ import { debounceTime } from 'rxjs';
 export class Main {
   private readonly cdr = inject(ChangeDetectorRef);
   private readonly destroyRef = inject(DestroyRef);
+  private timerId: number | null = null;
+  private lastStartAt: number | null = null;
+  private accumulatedMs = 0;
 
   protected readonly isEnabled = signal(false);
+  protected readonly elapsedMs = signal(0);
   protected readonly showMicroFields = signal(false);
   protected readonly showFocusFields = signal(false);
   protected readonly showKeypressFields = signal(false);
@@ -33,6 +37,7 @@ export class Main {
   protected readonly isInitialized = signal(false);
 
   readonly statusClass = computed(() => (this.isEnabled() ? 'text-green-500!' : 'text-red-500!'));
+  protected readonly workTime = computed(() => this.formatDuration(this.elapsedMs()));
 
   protected readonly form = new FormGroup({
     enableMicroJiggle: new FormControl(false, { nonNullable: true }),
@@ -70,6 +75,7 @@ export class Main {
 
     this.destroyRef.onDestroy(() => {
       unsubscribe();
+      this.stopTimer();
     });
 
     this.form.valueChanges
@@ -108,7 +114,14 @@ export class Main {
   }
 
   private applyState(state: JigglerState): void {
+    const wasEnabled = this.isEnabled();
     this.isEnabled.set(state.enabled);
+    if (state.enabled && !wasEnabled) {
+      this.startTimer();
+    }
+    if (!state.enabled && wasEnabled) {
+      this.stopTimer();
+    }
     this.showMicroFields.set(state.settings.enableMicroJiggle);
     this.showFocusFields.set(state.settings.keepFocusOnTitle);
     this.showKeypressFields.set(state.settings.enableKeypress);
@@ -118,5 +131,47 @@ export class Main {
     this.form.patchValue(state.settings, { emitEvent: false });
     this.isInitialized.set(true);
     this.cdr.markForCheck();
+  }
+
+  private startTimer(): void {
+    if (this.timerId !== null) {
+      return;
+    }
+    this.lastStartAt = Date.now();
+    this.updateElapsed();
+    this.timerId = window.setInterval(() => {
+      this.updateElapsed();
+    }, 1000);
+  }
+
+  private stopTimer(): void {
+    if (this.timerId !== null) {
+      window.clearInterval(this.timerId);
+      this.timerId = null;
+    }
+    if (this.lastStartAt !== null) {
+      this.accumulatedMs += Date.now() - this.lastStartAt;
+      this.lastStartAt = null;
+    }
+    this.updateElapsed();
+  }
+
+  private updateElapsed(): void {
+    const extra = this.lastStartAt === null ? 0 : Date.now() - this.lastStartAt;
+    this.elapsedMs.set(this.accumulatedMs + extra);
+    this.cdr.markForCheck();
+  }
+
+  private formatDuration(totalMs: number): string {
+    const totalSeconds = Math.max(0, Math.floor(totalMs / 1000));
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+
+    if (hours > 0) {
+      return `${hours}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+    }
+
+    return `${minutes}:${String(seconds).padStart(2, '0')}`;
   }
 }
